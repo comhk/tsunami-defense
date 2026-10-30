@@ -4,10 +4,10 @@
 
 **Blocked by:** 02
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Tests: HUD phase label and timer show the surge counter during a surge and the next-surge countdown during a gap, in both `zh-Hant` and `en`
-- [ ] Tests: the warning toast fires once, about 3 s before each surge after the first, and not for the first surge
-- [ ] Tests: both language files define the same set of keys
-- [ ] Pausing during a gap freezes the countdown (no `update` while paused)
-- [ ] The phase tooltip and README wave-flow text mention multiple surges
+- [x] Tests: HUD phase label and timer show the surge counter during a surge and the next-surge countdown during a gap, in both `zh-Hant` and `en`
+- [x] Tests: the warning toast fires once, about 3 s before each surge after the first, and not for the first surge
+- [x] Tests: both language files define the same set of keys
+- [x] Pausing during a gap freezes the countdown (no `update` while paused)
+- [x] The phase tooltip and README wave-flow text mention multiple surges

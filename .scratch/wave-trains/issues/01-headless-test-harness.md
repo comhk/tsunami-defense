@@ -4,10 +4,10 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] `node test/waves.test.mjs` exits 0 on the current game, and exits non-zero with a clear message when an assertion fails
-- [ ] The test hook is only exposed when the test flag is set; opening `index.html` in a browser behaves exactly as before
-- [ ] The test plays all 5 waves with no structures (the home may be lost; the harness must still be able to measure each wave, e.g. by disabling the lose check through the hook or by measuring waves one at a time)
-- [ ] Per-wave total inflow and peak home depth from the current code are printed and stored as baseline constants in the test
-- [ ] No npm dependencies or `package.json` needed
+- [x] `node test/waves.test.mjs` exits 0 on the current game, and exits non-zero with a clear message when an assertion fails
+- [x] The test hook is only exposed when the test flag is set; opening `index.html` in a browser behaves exactly as before
+- [x] The test plays all 5 waves with no structures (the home may be lost; the harness must still be able to measure each wave, e.g. by disabling the lose check through the hook or by measuring waves one at a time)
+- [x] Per-wave total inflow and peak home depth from the current code are printed and stored as baseline constants in the test
+- [x] No npm dependencies or `package.json` needed

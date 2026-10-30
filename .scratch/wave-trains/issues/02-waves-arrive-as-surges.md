@@ -4,7 +4,7 @@
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [x] Tests: inflow switches on and off at each surge's `at`/`dur`, and each wave has the expected surge count (wave 1 has exactly 1)
 - [x] Tests: a wave stays in `tsunami` until its last surge ends, even when all water is removed during a gap

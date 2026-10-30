@@ -1,6 +1,6 @@
 # Wave trains: each tsunami arrives as several surges
 
-Status: ready-for-agent
+Status: resolved
 
 ## Problem Statement
 
