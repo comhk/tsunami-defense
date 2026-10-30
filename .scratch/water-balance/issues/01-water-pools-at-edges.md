@@ -1,6 +1,6 @@
 # Water pools at the left edge and behind walls
 
-Status: needs-triage
+Status: resolved
 
 ## Problem
 

@@ -131,6 +131,10 @@ const HOME = { x: 1, y: 8, w: 3, h: 4 };
 const LOSE_DEPTH = 0.55;             // 家前水深刻度即失敗
 const INFLOW_END = 8;                // waveProgress 超過此值即停止注水
 const TSUNAMI_MAX = 20;              // waveProgress 超過此值強制進入退水
+const SEEP_KEEP = 0.7;               // 停止注水後每秒保留的水量比例
+const DRAIN_KEEP = 0.35;             // 退水階段每秒保留的水量比例
+const FLOW_RATE = 0.55;              // 每步流向下一格的水量比例
+const WATER_EPS = 0.008;             // 低於此水深視為乾涸
 
 const DEFS = {
   sandbag:   { name:'沙包',      cost:8,   hp:80,   block:true, size:1, color:'#c9a86a', h:6,  key:'1' },
@@ -318,14 +322,13 @@ function updateWater(dt){
       }
     }
   }
-  if(G.phase === 'tsunami') G.waveProgress += dt * G.waveSpeed;
-  // 退水
-  if(G.phase === 'drain'){
-    for(let i=0;i<G.water.length;i++){
-      G.water[i] *= Math.pow(0.35, dt);
-      if(G.water[i] < 0.008) G.water[i] = 0;
-    }
+  if(G.phase === 'tsunami'){
+    G.waveProgress += dt * G.waveSpeed;
+    // 滲水：停止注水後積水緩慢消退
+    if(G.waveProgress > INFLOW_END) decayWater(SEEP_KEEP, dt);
   }
+  // 退水
+  if(G.phase === 'drain') decayWater(DRAIN_KEEP, dt);
   // 冰凍計時
   for(let i=0;i<G.freeze.length;i++){
     if(G.freeze[i] > 0) G.freeze[i] = Math.max(0, G.freeze[i]-dt);
@@ -338,9 +341,26 @@ function updateWater(dt){
   }
 }
 
+// 每秒保留 keep 比例的水；凍結格不變
+function decayWater(keep, dt){
+  const k = Math.pow(keep, dt);
+  for(let i=0;i<G.water.length;i++){
+    if(G.freeze[i] > 0) continue;
+    G.water[i] *= k;
+    if(G.water[i] < WATER_EPS) G.water[i] = 0;
+  }
+}
+
 function flowStep(){
   const nw = new Float32Array(G.water.length);
   nw.set(G.water);
+
+  // 左邊界：水流出地圖
+  for(let y=0;y<ROWS;y++){
+    const i = idx(0,y);
+    if(G.freeze[i] > 0) continue;
+    nw[i] -= G.water[i] * FLOW_RATE;
+  }
 
   for(let x=COLS-1;x>=1;x--){
     for(let y=0;y<ROWS;y++){
@@ -349,7 +369,7 @@ function flowStep(){
       const h = G.water[i];
       if(h < 0.02) continue;
 
-      const transfer = h * 0.55;
+      const transfer = h * FLOW_RATE;
       if(transfer < 0.004) continue;
 
       const left = G.grid[x-1][y];
