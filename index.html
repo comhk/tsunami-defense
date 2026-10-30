@@ -493,7 +493,7 @@ function updateTowers(dt){
     if(def.tower === 'mg'){
       s.cd -= dt;
       if(s.cd <= 0){
-        s.cd = 0.14;
+        s.cd += 0.14;
         const ti = idx(best.gx, best.gy);
         G.water[ti] = Math.max(0, G.water[ti] - 0.09);
         // 彈道特效
@@ -509,7 +509,7 @@ function updateTowers(dt){
     else if(def.tower === 'rocket'){
       s.cd -= dt;
       if(s.cd <= 0){
-        s.cd = 2.4;
+        s.cd += 2.4;
         G.projectiles.push({
           type:'rocket',
           x1: cx, y1: cy,
