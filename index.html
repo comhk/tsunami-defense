@@ -170,6 +170,9 @@ const WAVES = [
   { energy:3.8, speed:1.4, prep:30 },
 ];
 
+// 測試旗標：test/waves.test.mjs 在載入前設定 window.__TSUNAMI_TEST__ = { noLose? }
+const TEST = window.__TSUNAMI_TEST__ || null;
+
 /* ══════════════ 狀態 ══════════════ */
 const G = {
   phase:'menu', wave:0, timer:0, paused:false,
@@ -728,7 +731,7 @@ function update(dt){
         homeDanger = Math.max(homeDanger, G.water[idx(x,y)]);
       }
     }
-    if(homeDanger > LOSE_DEPTH){
+    if(homeDanger > LOSE_DEPTH && !(TEST && TEST.noLose)){
       G.phase = 'lose';
       G.shake = 30;
       setTimeout(()=>endGame(false), 800);
@@ -1803,6 +1806,9 @@ fit();
 showMenu();
 
 requestAnimationFrame(t => { lastT = t; loop(t); });
+
+// 只在測試旗標下公開唯讀測試介面
+if(TEST) window.__tsunami = Object.freeze({ G, update, startGame, WAVES, HOME, COLS, ROWS, LOSE_DEPTH });
 
 })();
 </script>
