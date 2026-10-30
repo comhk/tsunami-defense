@@ -26,6 +26,8 @@
   #phasePill.danger{border-color:#ff4d4d;color:#ff8080;animation:pulse .6s infinite}
   @keyframes pulse{50%{background:rgba(120,20,20,.8)}}
   #spacer{flex:1}
+  #pauseBtn{cursor:pointer;user-select:none;pointer-events:auto}
+  #pauseBtn:hover{border-color:rgba(120,210,255,.85)}
 
   /* 工具列 */
   #toolbar{position:absolute;bottom:0;left:0;right:0;height:80px;
@@ -91,6 +93,7 @@
     <div class="pill"><span id="timerTxt">45s</span></div>
     <div id="spacer"></div>
     <div class="pill"><span id="waveTxt">第 1 / 5 波</span></div>
+    <div class="pill" id="pauseBtn" title="暫停 (P / Space)">⏸</div>
   </div>
 
   <div id="toolbar">
@@ -165,7 +168,7 @@ const WAVES = [
 
 /* ══════════════ 狀態 ══════════════ */
 const G = {
-  phase:'menu', wave:0, timer:0,
+  phase:'menu', wave:0, timer:0, paused:false,
   materials:80, power:{prod:0,cons:0,ok:true},
   water:new Float32Array(COLS*ROWS),
   freeze:new Float32Array(COLS*ROWS),
@@ -272,6 +275,7 @@ function startGame(){
   init();
   G.phase = 'prep';
   G.wave = 0;
+  togglePause(false);
   G.materials = START_MATS;
   G.timer = WAVES[0].prep;
   G.incomeAcc = 0; G.boxTimer = 0;
@@ -781,6 +785,7 @@ canvas.addEventListener('pointerdown', e => {
   if(gx<0 || gx>=COLS || gy<0 || gy>=ROWS) return;
 
   if(G.phase === 'menu' || G.phase === 'win' || G.phase === 'lose') return;
+  if(G.paused) return;
 
   // 1. 撿箱子
   for(let i=0;i<G.boxes.length;i++){
@@ -821,6 +826,8 @@ canvas.addEventListener('contextmenu', e => {
 
 window.addEventListener('keydown', e => {
   const k = e.key.toUpperCase();
+  if((k === 'P' || e.key === ' ') && canPause()){ e.preventDefault(); togglePause(); return; }
+  if(G.paused) return;
   for(const id in DEFS){
     if(DEFS[id].key === k){
       if(id === 'superbase' && !G.techUnlocked){ toast('需要先建造科技中心', true); return; }
@@ -840,6 +847,20 @@ window.addEventListener('keydown', e => {
     G.superAim = false;
     updateUI();
   }
+});
+
+/* ══════════════ 暫停 ══════════════ */
+function canPause(){
+  return G.phase === 'prep' || G.phase === 'tsunami' || G.phase === 'drain';
+}
+function togglePause(force){
+  if(!canPause()) return;
+  G.paused = force !== undefined ? force : !G.paused;
+  document.getElementById('pauseBtn').textContent = G.paused ? '▶' : '⏸';
+}
+document.getElementById('pauseBtn').onclick = () => togglePause();
+document.addEventListener('visibilitychange', () => {
+  if(document.hidden) togglePause(true);
 });
 
 /* ══════════════ 超級武器 ══════════════ */
@@ -919,6 +940,19 @@ function render(){
   ctx.fillStyle = botGrad;
   ctx.fillRect(0,H+WORLD_Y-10,960,20);
 
+  // 暫停畫面
+  if(G.paused){
+    ctx.fillStyle = 'rgba(4,10,18,0.6)';
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.fillStyle = '#dff4ff';
+    ctx.textAlign = 'center';
+    ctx.font = '700 36px sans-serif';
+    ctx.fillText('暫 停', canvas.width/2, canvas.height/2);
+    ctx.font = '13px sans-serif';
+    ctx.fillStyle = '#8fb3cc';
+    ctx.fillText('按 P / Space 或 ▶ 繼續', canvas.width/2, canvas.height/2 + 28);
+    ctx.textAlign = 'left';
+  }
 }
 
 /* --- 水體渲染 --- */
@@ -1647,7 +1681,7 @@ let lastT = performance.now();
 function loop(now){
   const dt = Math.min((now - lastT) / 1000, 0.05);
   lastT = now;
-  update(dt);
+  if(!G.paused) update(dt);
   render();
   requestAnimationFrame(loop);
 }
