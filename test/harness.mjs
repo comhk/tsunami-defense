@@ -127,18 +127,18 @@ export function watchInflow(G){
 }
 
 /**
- * Play every wave with no structures, stepping update(DT).
+ * Play every wave with no structures, stepping update(dt) (default DT).
  * Load the game with { noLose: true } so a flooded home doesn't end the run.
  * Returns [{ wave, inflow, peakHome }] per wave (wave is 1-based).
  */
-export function playAllWaves(game, { maxSeconds = 1200 } = {}){
+export function playAllWaves(game, { maxSeconds = 1200, dt = DT } = {}){
   const { hook, G } = game;
   const { HOME, COLS } = hook;
   hook.startGame();
   const inflow = watchInflow(G);
   const peak = {};
-  for(let t = 0; t < maxSeconds && G.phase !== 'win' && G.phase !== 'lose'; t += DT){
-    hook.update(DT);
+  for(let t = 0; t < maxSeconds && G.phase !== 'win' && G.phase !== 'lose'; t += dt){
+    hook.update(dt);
     if(G.phase === 'tsunami' || G.phase === 'drain'){
       for(let x = HOME.x; x < HOME.x + HOME.w; x++)
         for(let y = HOME.y; y < HOME.y + HOME.h; y++)

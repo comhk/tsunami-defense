@@ -195,6 +195,8 @@ const G = {
   incomeAcc:0, boxTimer:0,
   shake:0, time:0,
   waveProgress:0, inflowEnd:0,
+  pulseIdx:-1,     // 本幀正在注水的湧浪（-1 = 沒有）；注水與 HUD 共用
+  warnedIdx:0,     // 已出警告的最後一道湧浪
   techUnlocked:false, superUnlocked:false,
   superCD:0,
   superAim:false,
@@ -355,6 +357,7 @@ function startWave(){
   G.waveProgress = 0;
   G.waveSpeed = w.speed;
   G.inflowEnd = inflowEndOf(w);
+  G.pulseIdx = pulseIndexAt(w, 0); G.warnedIdx = 0;  // 每波重設；進度 0 時第一道湧浪已在注水
   G.boxes.length = 0;
   G.shake = 8;
   toast(L().tWaveIncoming(G.wave+1), true);
@@ -377,23 +380,30 @@ function endGame(win){
   document.getElementById('startBtn').onclick = () => { startGame(); };
 }
 
-// 第一道之後的每道湧浪：到達前約 SURGE_WARN 秒（實際時間）出警告提示，到達時震動畫面
+// 第一道之後的每道湧浪：到達前約 SURGE_WARN 秒（實際時間）出警告提示，到達時震動畫面。
+// 警告只在間隔中出現（上一道湧浪仍在注水時延到間隔開始），每道只出一次；
+// 提示的秒數按實際出警告時剩餘的時間計算，與 HUD 倒數一致。
 function surgeCues(w, p0, p1){
   for(let k = 1; k < w.pulses.length; k++){
     const at = w.pulses[k].at;
-    const warnAt = at - SURGE_WARN * G.waveSpeed;
-    if(p0 < warnAt && p1 >= warnAt) toast(L().tSurgeWarn(k+1, SURGE_WARN), true);
-    if(p0 < at && p1 >= at) G.shake = 8;
+    if(k > G.warnedIdx && G.pulseIdx < 0 && p0 < at && p0 >= at - SURGE_WARN * G.waveSpeed){
+      G.warnedIdx = k;
+      toast(L().tSurgeWarn(k+1, Math.max(1, Math.ceil((at - p1) / G.waveSpeed))), true);
+    }
+    if(p0 < at && p1 >= at) G.shake = Math.max(G.shake, 8);
   }
 }
 
 /* ══════════════ 水體模擬 ══════════════ */
 function updateWater(dt){
   // 海嘯階段：湧浪期間從右側注入；強度 > 1 的湧浪提高注水上限（最多至滿水深）
-  const pulse = G.phase === 'tsunami' ? WAVES[G.wave].pulses[pulseIndexAt(WAVES[G.wave], G.waveProgress)] : null;
+  G.pulseIdx = G.phase === 'tsunami' ? pulseIndexAt(WAVES[G.wave], G.waveProgress) : -1;
+  const pulse = G.pulseIdx >= 0 ? WAVES[G.wave].pulses[G.pulseIdx] : null;
   if(pulse){
-    const injectRate = 0.55 * G.waveSpeed * pulse.power;
-    const cap = WATER_MAX * Math.min(1, 0.92 * Math.max(1, pulse.power));
+    // 以 60fps 為基準按 dt 縮放，令注水量不受幀率影響
+    const injectRate = 0.55 * G.waveSpeed * pulse.power * dt * 60;
+    // 注水上限：強度 ≤ 1 為 92%，之後平滑上升（1.1→94%、1.3→98%、1.4 起滿水深）
+    const cap = WATER_MAX * (pulse.power <= 1 ? 0.92 : Math.min(1, 0.92 + (pulse.power - 1) * 0.2));
     for(let y=0;y<ROWS;y++){
       const i = idx(COLS-1, y);
       if(G.water[i] < cap){
@@ -1770,15 +1780,16 @@ function updateUI(){
   } else if(G.phase === 'tsunami'){
     // 湧浪中顯示「湧浪 n / N」；間隔中倒數到下一道湧浪（實際秒數）；最後一道湧浪後沿用海嘯標籤
     const w = WAVES[G.wave];
-    const k = pulseIndexAt(w, G.waveProgress);
-    const next = nextPulseIndex(w, G.waveProgress);
+    // 沿用本幀注水所用的湧浪索引，HUD 與注水不會相差一幀
+    const k = G.pulseIdx;
+    const next = k >= 0 ? -1 : w.pulses.findIndex(s => s.at + s.dur > G.waveProgress);
     phasePill.classList.add('danger');
     if(k >= 0){
       phaseTxt.textContent = L().phaseSurge(k+1, w.pulses.length);
       timerTxt.textContent = '——';
     } else if(next >= 0){
       phaseTxt.textContent = L().phaseNextSurge;
-      timerTxt.textContent = Math.ceil((w.pulses[next].at - G.waveProgress) / G.waveSpeed) + 's';
+      timerTxt.textContent = Math.max(0, Math.ceil((w.pulses[next].at - G.waveProgress) / G.waveSpeed)) + 's';
     } else {
       phaseTxt.textContent = L().phaseTsunami;
       timerTxt.textContent = '——';

@@ -7,7 +7,7 @@ import { loadGame, playAllWaves, watchInflow, DT } from './harness.mjs';
 // "Before" baseline: total water poured in per wave with no structures,
 // recorded from the single-pulse waves (energy multiplier) by ticket 01.
 // Wave-train work must keep each wave within ±15% of these.
-// Measured at DT = 1/60 (the inflow adds water per update call, not per second).
+// Measured at DT = 1/60. Inflow is now scaled by dt * 60, so 1/60 gives the same totals.
 // Peak home depth at that time was 0.903 for every wave (info only).
 const BASELINE_INFLOW = [870.7, 1260.1, 1657.3, 1983.5, 2325.2];
 const TOLERANCE = 0.15;
@@ -29,6 +29,36 @@ test('balance: total inflow per wave with no structures stays within ±15% of ba
     assert.ok(Math.abs(r.inflow - base) <= TOLERANCE * base,
       `wave ${r.wave}: inflow ${r.inflow.toFixed(1)} is outside ±${TOLERANCE * 100}% of baseline ${base}`);
   });
+});
+
+test('inflow per wave does not depend on the frame rate', () => {
+  const at = dt => playAllWaves(loadGame({ noLose: true }), { dt }).map(r => r.inflow);
+  const ref = at(1 / 60);
+  for(const dt of [1 / 30, 1 / 144]){
+    at(dt).forEach((v, i) => assert.ok(Math.abs(v - ref[i]) <= 0.05 * ref[i],
+      `wave ${i + 1}: inflow ${v.toFixed(1)} at dt=1/${Math.round(1 / dt)} vs ${ref[i].toFixed(1)} at 1/60`));
+  }
+});
+
+// When towers keep the right edge low, inflow is limited by the inflow rate
+// rather than the edge cap, so this is where a per-frame rate would show.
+test('inflow per surge does not depend on the frame rate when the map is kept dry', () => {
+  const drained = (n, dt) => {
+    const game = startWaveN(n);
+    const { hook, G } = game;
+    const inflow = watchInflow(G);
+    for(let i = 0; i < 600 / dt && G.phase === 'tsunami'; i++){ G.water.fill(0); hook.update(dt); }
+    return inflow[n];
+  };
+  // 1/30 is left out: big surges would hit WATER_MAX in one frame from an empty cell.
+  for(let n = 0; n < SURGE_COUNTS.length; n++){
+    const ref = drained(n, 1 / 60);
+    for(const dt of [1 / 90, 1 / 144]){
+      const v = drained(n, dt);
+      assert.ok(Math.abs(v - ref) <= 0.05 * ref,
+        `wave ${n + 1}: drained inflow ${v.toFixed(1)} at dt=1/${Math.round(1 / dt)} vs ${ref.toFixed(1)} at 1/60`);
+    }
+  }
 });
 
 // ── Surges (ticket 02) ──
@@ -146,6 +176,45 @@ test('materials do not increase during gaps between surges', () => {
   }
 });
 
+// The edge cap only matters when an edge cell is already deep: a surge tops
+// the cell up only while it is below the cap. Hold the right edge at a fixed
+// depth and check which surge powers still pour water in.
+test('the edge cap rises smoothly with surge power: 92% up to power 1, full at 1.4', () => {
+  const toppedUp = (power, depth) => {
+    const game = startWaveN(0);
+    const { hook, G } = game;
+    hook.WAVES[0].pulses[0].power = power;  // the wave table is shared by reference
+    stepTo(game, 2);
+    G.flowTimer = 0;  // no flow step this frame, so the edge keeps its depth until inflow
+    for(let y = 0; y < hook.ROWS; y++) G.water[y * hook.COLS + hook.COLS - 1] = depth;
+    const inflow = watchInflow(G);  // after the setup writes, so only inflow is counted
+    hook.update(DT);
+    return (inflow[0] || 0) > 0;
+  };
+  const MAX = 1.4;  // WATER_MAX
+  // [power, edge depth as a fraction of max, expect top-up]
+  const cases = [
+    [1.0, 0.91, true], [1.0, 0.93, false],
+    [0.8, 0.93, false],
+    [1.1, 0.93, true], [1.1, 0.95, false],
+    [1.3, 0.97, true], [1.3, 0.99, false],
+    [1.4, 0.995, true],
+  ];
+  for(const [power, frac, expect] of cases)
+    assert.equal(toppedUp(power, frac * MAX), expect, `power ${power}, edge at ${frac * 100}% of max`);
+});
+
+test('a later surge does not cut short a stronger shake already running', () => {
+  const game = startWaveN(4);  // wave 5: second surge at 11
+  const { hook, G } = game;
+  // Stop on the last frame before the surge, so the next update crosses 11.
+  for(let i = 0; i < 60 * 600 && G.waveProgress + 1.4 * DT < 11; i++) hook.update(DT);
+  assert.ok(G.waveProgress < 11);
+  G.shake = 20;
+  hook.update(DT);
+  assert.ok(G.shake > 8, `shake dropped to ${G.shake} when the surge hit`);
+});
+
 // ── HUD surge counter and warnings (ticket 03) ──
 const hud = game => ({
   phase: game.document.getElementById('phaseTxt').textContent,
@@ -193,28 +262,85 @@ test('both language files define the same set of keys', () => {
   assert.ok(keys('en').includes('phaseSurge') && keys('en').includes('tSurgeWarn'));
 });
 
-test('a warning toast appears once, about 3 s before each surge after the first', () => {
+// The warning for a later surge fires SURGE_WARN (3) real seconds before it,
+// but never while the previous surge is still pouring: if that point falls
+// inside the previous surge (wave 5), it fires as soon as the gap begins.
+test('a warning toast appears once per later surge, in the gap, alongside the countdown', () => {
   for(let n = 0; n < SURGE_COUNTS.length; n++){
     const game = startWaveN(n);
     const { hook, G } = game;
     const w = hook.WAVES[n];
+    const step = w.speed * DT;
     const toastEl = game.document.getElementById('toast');
-    const warnings = [];  // { text, secsBefore[] } for each new toast during the wave
+    const inflow = watchInflow(G);
+    const warnings = [];  // { text, p, added, hud } for each new toast during the wave
     let last = toastEl.textContent;
     for(let i = 0; i < 60 * 600 && G.phase === 'tsunami'; i++){
-      const p = G.waveProgress;
+      const p = G.waveProgress, before = inflow[n] || 0;
       hook.update(DT);
       if(toastEl.textContent !== last){
         last = toastEl.textContent;
-        warnings.push({ text: last, p });
+        warnings.push({ text: last, p, added: (inflow[n] || 0) - before, hud: hud(game) });
       }
     }
     const later = [...w.pulses].slice(1);  // spread: vm arrays are from another realm
+    // Every gap in the current patterns is at least 2.86 s long, so every warning says 3 s.
     assert.deepEqual(warnings.map(t => t.text), later.map((_, k) => `⚠ Surge ${k + 2} in 3 s!`),
       `wave ${n + 1}: unexpected toasts`);
     warnings.forEach((t, k) => {
-      const secsBefore = (later[k].at - t.p) / w.speed;
-      assert.ok(Math.abs(secsBefore - 3) < 0.05, `wave ${n + 1}: warning ${secsBefore.toFixed(2)} s before surge ${k + 2}`);
+      const prev = w.pulses[k];
+      const due = Math.max(later[k].at - 3 * w.speed, prev.at + prev.dur);
+      // t.p is the progress at the start of the frame the warning fired in.
+      assert.ok(t.p > due - step - 1e-9 && t.p <= due + step + 1e-9,
+        `wave ${n + 1}: warning for surge ${k + 2} at progress ${t.p.toFixed(3)}, expected ${due.toFixed(3)}`);
+      assert.equal(t.added, 0, `wave ${n + 1}: warning for surge ${k + 2} fired while a surge was pouring`);
+      assert.deepEqual(t.hud, { phase: 'Next surge', timer: '3s' }, `wave ${n + 1}: HUD beside warning ${k + 2}`);
     });
   }
+});
+
+test('when a gap is shorter than 3 s, the warning shows the seconds actually left', () => {
+  const game = loadGame({ noLose: true });
+  const { hook, G } = game;
+  // Wave 2 (speed 1.1): first surge ends at 7; move the second to 8.5, a 1.36 s gap.
+  hook.WAVES[1].pulses[1].at = 8.5;
+  hook.startGame();
+  G.wave = 1; G.timer = 0;
+  hook.update(DT);
+  const toastEl = game.document.getElementById('toast');
+  const toasts = [];
+  for(let i = 0; i < 60 * 600 && G.phase === 'tsunami'; i++){
+    const before = toastEl.textContent;
+    hook.update(DT);
+    if(toastEl.textContent !== before) toasts.push({ text: toastEl.textContent, hud: hud(game) });
+  }
+  assert.deepEqual(toasts, [{ text: '⚠ Surge 2 in 2 s!', hud: { phase: 'Next surge', timer: '2s' } }]);
+});
+
+test('HUD shows surge 1 as soon as a wave starts', () => {
+  const game = startWaveN(1);
+  assert.deepEqual(hud(game), { phase: '⚠ Surge 1 / 2', timer: '——' });
+});
+
+test('surge data: each wave\'s surges are sorted by start and do not overlap; wave 1 has one', () => {
+  const { hook } = loadGame();
+  assert.equal(hook.WAVES[0].pulses.length, 1);
+  hook.WAVES.forEach((w, n) => {
+    for(let k = 0; k + 1 < w.pulses.length; k++){
+      const a = w.pulses[k], b = w.pulses[k + 1];
+      assert.ok(b.at >= a.at + a.dur, `wave ${n + 1}: surge ${k + 2} starts at ${b.at}, before surge ${k + 1} ends at ${a.at + a.dur}`);
+    }
+  });
+});
+
+test('wave tooltip shows the surge count and the biggest surge, in both languages', () => {
+  const { window, hook } = loadGame();
+  const consts = { SUPER: {}, WAVES: hook.WAVES, BASE_INCOME: 0, MAX_TRUCKS: 0, LOSE_DEPTH: 0 };
+  const line = (lang, n) => window.TSUNAMI_LANGS[lang](consts).tipWave(n, hook.WAVES[n - 1]).split('\n')[1].trim();
+  // Biggest = highest dur * power. Wave 5: 7, 16.8, 8.1 -> #2. Wave 4: 5.4, 6, 13 -> #3.
+  assert.equal(line('en', 1), '1 surge · Flow speed ×1 · Prep 45s');
+  assert.equal(line('en', 5), '3 surges · biggest: #2 · Flow speed ×1.4 · Prep 30s');
+  assert.equal(line('en', 4), '3 surges · biggest: #3 · Flow speed ×1.3 · Prep 32s');
+  assert.equal(line('zh-Hant', 1), '1 道湧浪 · 水流速度 ×1 · 準備 45s');
+  assert.equal(line('zh-Hant', 5), '3 道湧浪 · 最大：第 2 道 · 水流速度 ×1.4 · 準備 30s');
 });
