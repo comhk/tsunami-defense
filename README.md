@@ -27,6 +27,14 @@
 | `R` | 超級武器瞄準 |
 | `P` / `Space` / ⏸ | 暫停 / 繼續（切換分頁時自動暫停）|
 | 滑鼠停留 | 建築按鈕、資源列顯示說明；暫停時可查看地圖上的建築血量、水深、物資箱 |
+
+## 語言 / Language
+
+支援繁體中文與 English。第一次按「開始遊戲」時會詢問語言，之後記住選擇（瀏覽器 `localStorage`）；
+開始畫面的「Language / 語言」可隨時切換。所有文字都在 `index.html` 的 `STR` 表內。
+
+Traditional Chinese and English are supported. The game asks on the first Start and remembers the choice;
+use "Language / 語言" on the start screen to switch.
 | `Esc` | 取消 |
 
 ## 執行

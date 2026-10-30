@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>海嘯：最後防線 · 半3D版</title>
+<title>海嘯：最後防線 · Tsunami: Last Line</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{width:100%;height:100%;background:#080c12;overflow:hidden;
@@ -68,12 +68,14 @@
   #overlay p{font-size:12.5px;line-height:1.9;color:#8fb3cc;max-width:620px}
   #overlay .hi{color:#5fd4ff;font-weight:700}
   #overlay .warn{color:#ff8a5c;font-weight:700}
-  #startBtn{margin-top:6px;padding:10px 40px;font-size:15px;letter-spacing:3px;
+  #startBtn,.langBtn{margin-top:6px;padding:10px 40px;font-size:15px;letter-spacing:3px;
     border:1px solid #4fd8ff;border-radius:30px;background:rgba(20,70,110,.6);
     color:#dff4ff;cursor:pointer;transition:.15s;font-weight:700}
-  #startBtn:hover{background:rgba(40,140,200,.85);box-shadow:0 0 30px rgba(80,216,255,.6);
+  #startBtn:hover,.langBtn:hover{background:rgba(40,140,200,.85);box-shadow:0 0 30px rgba(80,216,255,.6);
     transform:scale(1.05)}
   #overlay.hidden{display:none}
+  .langs{display:flex;gap:14px;margin-top:6px}
+  #langLink{margin-top:4px;font-size:11.5px;color:#5a7a95;cursor:pointer;text-decoration:underline}
 
   #toast{position:absolute;top:56px;left:50%;transform:translateX(-50%);
     background:rgba(20,60,90,.92);border:1px solid #5fd4ff;border-radius:8px;
@@ -97,10 +99,10 @@
     <div class="pill" data-tip="mats"><span>🪵</span><b id="mats">0</b></div>
     <div class="pill" id="powerPill" data-tip="power"><span>⚡</span><b id="powerTxt">0/0</b></div>
     <div class="pill" data-tip="trucks"><span>🚛</span><b id="unitTxt">0</b></div>
-    <div class="pill" id="phasePill" data-tip="phase"><span id="phaseTxt">準備階段</span></div>
+    <div class="pill" id="phasePill" data-tip="phase"><span id="phaseTxt"></span></div>
     <div class="pill" data-tip="phase"><span id="timerTxt">45s</span></div>
     <div id="spacer"></div>
-    <div class="pill" data-tip="wave"><span id="waveTxt">第 1 / 5 波</span></div>
+    <div class="pill" data-tip="wave"><span id="waveTxt"></span></div>
     <div class="pill" id="pauseBtn" data-tip="pause">⏸</div>
   </div>
 
@@ -112,18 +114,7 @@
   <div id="toast"></div>
   <div id="tip"></div>
 
-  <div id="overlay">
-    <h1>海 嘯</h1>
-    <h2>最 後 防 線 · 半 3 D 版</h2>
-    <p>
-      巨浪將至。<span class="hi">準備階段</span>收集物資、建造設施與防線。<br>
-      水會沿地面流動，<span class="hi">被阻礙時會向兩側漫流</span>——小心繞過防線！<br>
-      建造<span class="hi">機槍塔 / 火箭炮塔 / 冷凍光線塔</span>主動削弱海嘯。<br>
-      <span class="hi">科技中心</span>解鎖<span class="hi">超級武器基地</span>，建成後可發射軌道離子炮（CD 45 秒）。<br>
-      撐過 5 波海嘯即勝利。
-    </p>
-    <button id="startBtn">開 始 遊 戲</button>
-  </div>
+  <div id="overlay"></div>
 </div>
 
 <script>
@@ -151,21 +142,21 @@ const START_MATS = 80;               // 開局材料
 const BASE_INCOME = 3;               // 準備階段每秒基本收入
 
 const DEFS = {
-  sandbag:   { name:'沙包',      cost:14,  hp:400,  block:true, size:1, color:'#c9a86a', h:6,  key:'1' },
-  tree:      { name:'防護林',    cost:22,  hp:650,  block:true, size:1, color:'#3e8a3e', h:16, key:'2' },
-  wall:      { name:'石牆',      cost:26,  hp:900,  block:true, size:1, color:'#8c8c96', h:12, key:'3' },
-  dike:      { name:'堤壩',      cost:45,  hp:1900, block:true, size:1, color:'#b4b4be', h:18, key:'4' },
-  mg:        { name:'機槍塔',    cost:30,  hp:150,  block:true, size:1, color:'#6a7a6a', h:20, key:'5', tower:'mg',     range:3.6, dmg:1.2, cd:0.14 },
-  rocket:    { name:'火箭炮塔',  cost:60,  hp:180,  block:true, size:1, color:'#8a6a5a', h:22, key:'6', tower:'rocket', range:4.5, dmg:1.4, cd:0.5 },
-  frost:     { name:'冷凍光線塔',cost:55,  hp:140,  block:true, size:1, color:'#5a9aca', h:20, key:'7', tower:'frost',  range:3.2, dmg:0.8 },
-  dump:      { name:'垃圾場',    cost:50,  hp:200,  block:true, size:2, color:'#6a7a5a', h:10, key:'8', producer:true },
-  power:     { name:'發電廠',    cost:70,  hp:220,  block:true, size:2, color:'#4a7aa8', h:16, key:'9', power:30 },
-  recycle:   { name:'回收站',    cost:40,  hp:160,  block:true, size:2, color:'#3f8f6a', h:8,  key:'0', income:2 },
-  tech:      { name:'科技中心',  cost:150, hp:400,  block:true, size:2, color:'#7a5a9a', h:26, key:'T' },
-  superbase: { name:'超級武器基地',cost:300,hp:500, block:true, size:2, color:'#a05050', h:30, key:'Y' },
+  sandbag:   { cost:14,  hp:400,  block:true, size:1, color:'#c9a86a', h:6,  key:'1' },
+  tree:      { cost:22,  hp:650,  block:true, size:1, color:'#3e8a3e', h:16, key:'2' },
+  wall:      { cost:26,  hp:900,  block:true, size:1, color:'#8c8c96', h:12, key:'3' },
+  dike:      { cost:45,  hp:1900, block:true, size:1, color:'#b4b4be', h:18, key:'4' },
+  mg:        { cost:30,  hp:150,  block:true, size:1, color:'#6a7a6a', h:20, key:'5', tower:'mg',     range:3.6, dmg:1.2, cd:0.14 },
+  rocket:    { cost:60,  hp:180,  block:true, size:1, color:'#8a6a5a', h:22, key:'6', tower:'rocket', range:4.5, dmg:1.4, cd:0.5 },
+  frost:     { cost:55,  hp:140,  block:true, size:1, color:'#5a9aca', h:20, key:'7', tower:'frost',  range:3.2, dmg:0.8 },
+  dump:      { cost:50,  hp:200,  block:true, size:2, color:'#6a7a5a', h:10, key:'8', producer:true },
+  power:     { cost:70,  hp:220,  block:true, size:2, color:'#4a7aa8', h:16, key:'9', power:30 },
+  recycle:   { cost:40,  hp:160,  block:true, size:2, color:'#3f8f6a', h:8,  key:'0', income:2 },
+  tech:      { cost:150, hp:400,  block:true, size:2, color:'#7a5a9a', h:26, key:'T' },
+  superbase: { cost:300,hp:500, block:true, size:2, color:'#a05050', h:30, key:'Y' },
 };
 
-const SUPER = { cd:45, radius:6, name:'軌道離子炮' };
+const SUPER = { cd:45, radius:6 };
 
 const WAVES = [
   { energy:1.0, speed:1.0, prep:45 },
@@ -279,6 +270,178 @@ function init(){
   }
 }
 
+/* ══════════════ 語言 ══════════════ */
+const STR = {
+  'zh-Hant': {
+    title: '海嘯：最後防線 · 半3D版',
+    names: { sandbag:'沙包', tree:'防護林', wall:'石牆', dike:'堤壩', mg:'機槍塔', rocket:'火箭炮塔',
+      frost:'冷凍光線塔', dump:'垃圾場', power:'發電廠', recycle:'回收站', tech:'科技中心',
+      superbase:'超級武器基地', super:'軌道離子炮' },
+    role: {
+      sandbag:  '便宜的擋水牆，適合快速封住缺口。',
+      tree:     '中等擋水，比沙包耐打。',
+      wall:     '高血量擋水牆。',
+      dike:     '血量最高，適合補在最多水衝擊的位置。',
+      mg:       '高射速，每發清走射程內最深一格的水。',
+      rocket:   '範圍爆炸，清走目標周圍多格的水。',
+      frost:    '持續光束：清水並凍結水格，凍結的水不會流動。',
+      dump:     '準備階段每 14 秒生產一輛垃圾車，自動撿物資箱（最多 5 輛）。需電力充足。',
+      power:    '提供電力。',
+      recycle:  '準備階段每秒 +2 材料（電力不足時減半）。',
+      tech:     '解鎖超級武器基地。',
+      superbase:'解鎖軌道離子炮。',
+    },
+    menuH1: '海 嘯', menuH2: '最 後 防 線 · 半 3 D 版',
+    menuP: () => `巨浪將至。<span class="hi">準備階段</span>收集物資、建造設施與防線。<br>
+      水會沿地面流動，<span class="hi">遇到障礙物會向斜前方漫流</span>——小心被繞過防線！<br>
+      <span class="hi">牆</span>擋水，<span class="hi">機槍塔 / 火箭炮塔 / 冷凍光線塔</span>清水。<br>
+      <span class="hi">科技中心</span>解鎖<span class="hi">超級武器基地</span>，建成後可發射軌道離子炮（CD ${SUPER.cd} 秒）。<br>
+      撐過 ${WAVES.length} 波海嘯即勝利。`,
+    start: '開 始 遊 戲', again: '再 玩 一 次', retry: '重 新 挑 戰',
+    pickLang: '選擇語言 · Choose language', changeLang: 'Language / 語言',
+    winH1: '守 住 了', winH2: '村 莊 平 安',
+    winP: m => `${WAVES.length} 波海嘯全部擋下，你的家完好無損。<br>剩餘材料：<span class="hi">${m}</span>`,
+    loseH1: '家 園 已 毀', loseH2: '海 嘯 吞 沒 了 一 切',
+    loseP: w => `在第 <span class="warn">${w}</span> 波倒下。<br>試著用塔的射程覆蓋缺口，並注意水會繞過障礙物。`,
+    wave: (n, total) => `第 ${n} / ${total} 波`,
+    phasePrep: '準備階段', phaseTsunami: '⚠ 海嘯來襲', phaseDrain: '海水退去…',
+    tWaveIncoming: n => `⚠ 第 ${n} 波海嘯來襲！`,
+    tNextWave: (n, s) => `第 ${n} 波即將來臨 — 準備時間 ${s} 秒`,
+    tNoMats: '材料不足', tCantBuild: '這裡無法建造', tMats: n => `+${n} 材料`,
+    tSuperLocked: '尚未解鎖超級武器', tCooldown: s => `冷卻中 ${s}s`,
+    tNeedTech: '需要先建造科技中心', tNeedSuper: '需要先建造科技中心與超級武器基地',
+    tSuperFire: '⚡ 軌道離子炮發射！',
+    paused: '暫 停', pausedHint: '按 P / Space 或 ▶ 繼續',
+    home: '🏠 我的家',
+    superBtn: () => `半徑 ${SUPER.radius} · CD ${SUPER.cd}s`,
+    cost: '成本', hp: '血量', size2: '佔地 2×2', supply: '供電', use: '耗電',
+    frostStats: d => `射程 ${d.range} · 每秒清水 ${d.dmg}`,
+    towerStats: d => `射程 ${d.range} · 每發清水 ${d.dmg} · 冷卻 ${d.cd}s`,
+    hotkey: k => `快捷鍵 ${k}`,
+    tipMats: m => `<span class="t">🪵 材料 ${m}</span>用來建造。<br>
+      準備階段每秒 +<b>${BASE_INCOME}</b>，每座回收站再 +2。<br>點擊物資箱 +10–17。`,
+    tipPower: p => `<span class="t">⚡ 電力 耗電 ${p.cons} / 供電 ${p.prod}</span>
+      ${p.ok ? '電力充足。' : '<b>電力不足！</b>'}<br>
+      不足時回收站收益減半、垃圾場停止生產垃圾車。塔不受影響。`,
+    tipTrucks: n => `<span class="t">🚛 垃圾車 ${n} / ${MAX_TRUCKS}</span>由垃圾場在準備階段生產，自動撿物資箱。`,
+    tipPhase: `<span class="t">波次流程</span>準備：建造、撿物資箱。<br>
+      海嘯：右側注水，之後積水慢慢滲退；水清得快，波次就早完結。<br>退水：海水退去，進入下一波。`,
+    tipWave: (n, w) => `<span class="t">第 ${n} / ${WAVES.length} 波</span>
+      注水時長 ×${w.energy} · 水流速度 ×${w.speed} · 準備 ${w.prep}s`,
+    tipSuper: () => `<span class="t">🛰️ 軌道離子炮</span>清空半徑 ${SUPER.radius} 內的水並短暫凍結。<br>
+      冷卻 ${SUPER.cd}s · 需要科技中心與超級武器基地 · 快捷鍵 R`,
+    tipPause: p => p ? '繼續（P / Space）' : '暫停（P / Space）',
+    tipBox: s => `<span class="t">📦 物資箱</span>點擊 +10–17 材料 · ${s} 秒後消失`,
+    tipHome: h => `<span class="t">🏠 我的家</span>水深 <b>${h}</b>，超過 ${LOSE_DEPTH} 即失敗。`,
+    tipWater: (h, frozen) => `<span class="t">🌊 水深 ${h}</span>${frozen ? '已凍結，不會流動。' : ''}`,
+  },
+  en: {
+    title: 'Tsunami: Last Line of Defense',
+    names: { sandbag:'Sandbag', tree:'Tree Belt', wall:'Stone Wall', dike:'Dike', mg:'Machine Gun',
+      rocket:'Rocket', frost:'Freeze Ray', dump:'Dump', power:'Power Plant', recycle:'Recycler',
+      tech:'Tech Center', superbase:'Super Base', super:'Orbital Ion Cannon' },
+    role: {
+      sandbag:  'Cheap water barrier. Good for plugging gaps fast.',
+      tree:     'Medium barrier, tougher than a sandbag.',
+      wall:     'High-HP water barrier.',
+      dike:     'Highest HP. Place it where the water hits hardest.',
+      mg:       'Fast fire. Each shot clears the deepest water tile in range.',
+      rocket:   'Area blast. Clears water on several tiles around the target.',
+      frost:    'Constant beam: clears water and freezes the tile. Frozen water does not flow.',
+      dump:     'Makes a garbage truck every 14 s during prep (max 5). Trucks pick up boxes. Needs enough power.',
+      power:    'Supplies power.',
+      recycle:  '+2 materials per second during prep (halved when power is short).',
+      tech:     'Unlocks the Super Base.',
+      superbase:'Unlocks the Orbital Ion Cannon.',
+    },
+    menuH1: 'TSUNAMI', menuH2: 'LAST LINE OF DEFENSE',
+    menuP: () => `A giant wave is coming. In the <span class="hi">prep phase</span>, collect supplies and build defences.<br>
+      Water flows over the ground and <span class="hi">spills diagonally around obstacles</span>. Watch for gaps!<br>
+      <span class="hi">Walls</span> hold water back; <span class="hi">Machine Guns, Rockets and Freeze Rays</span> clear it.<br>
+      The <span class="hi">Tech Center</span> unlocks the <span class="hi">Super Base</span>, which fires the Orbital Ion Cannon (${SUPER.cd} s cooldown).<br>
+      Survive ${WAVES.length} waves to win.`,
+    start: 'START GAME', again: 'PLAY AGAIN', retry: 'TRY AGAIN',
+    pickLang: '選擇語言 · Choose language', changeLang: 'Language / 語言',
+    winH1: 'YOU HELD', winH2: 'THE VILLAGE IS SAFE',
+    winP: m => `All ${WAVES.length} waves stopped. Your home is untouched.<br>Materials left: <span class="hi">${m}</span>`,
+    loseH1: 'HOME LOST', loseH2: 'THE TSUNAMI TOOK IT ALL',
+    loseP: w => `Fell on wave <span class="warn">${w}</span>.<br>Cover gaps with tower range, and watch for water flowing around obstacles.`,
+    wave: (n, total) => `Wave ${n} / ${total}`,
+    phasePrep: 'Prep', phaseTsunami: '⚠ Tsunami!', phaseDrain: 'Water receding…',
+    tWaveIncoming: n => `⚠ Wave ${n} incoming!`,
+    tNextWave: (n, s) => `Wave ${n} is coming — ${s} s to prepare`,
+    tNoMats: 'Not enough materials', tCantBuild: "Can't build here", tMats: n => `+${n} materials`,
+    tSuperLocked: 'Super weapon not unlocked', tCooldown: s => `Cooling down ${s}s`,
+    tNeedTech: 'Build a Tech Center first', tNeedSuper: 'Build a Tech Center and a Super Base first',
+    tSuperFire: '⚡ Ion cannon fired!',
+    paused: 'PAUSED', pausedHint: 'Press P / Space or ▶ to resume',
+    home: '🏠 Home',
+    superBtn: () => `Radius ${SUPER.radius} · CD ${SUPER.cd}s`,
+    cost: 'Cost', hp: 'HP', size2: 'Size 2×2', supply: 'Power', use: 'Uses',
+    frostStats: d => `Range ${d.range} · Clears ${d.dmg}/s`,
+    towerStats: d => `Range ${d.range} · Clears ${d.dmg}/shot · Cooldown ${d.cd}s`,
+    hotkey: k => `Hotkey ${k}`,
+    tipMats: m => `<span class="t">🪵 Materials ${m}</span>Used for building.<br>
+      +<b>${BASE_INCOME}</b>/s during prep, +2 more per Recycler.<br>Click a supply box for +10–17.`,
+    tipPower: p => `<span class="t">⚡ Power used ${p.cons} / supply ${p.prod}</span>
+      ${p.ok ? 'Power is enough.' : '<b>Not enough power!</b>'}<br>
+      When short, Recyclers earn half and Dumps stop making trucks. Towers are not affected.`,
+    tipTrucks: n => `<span class="t">🚛 Trucks ${n} / ${MAX_TRUCKS}</span>Made by Dumps during prep. They pick up supply boxes.`,
+    tipPhase: `<span class="t">How a wave works</span>Prep: build and collect boxes.<br>
+      Tsunami: water pours in from the right, then slowly seeps away. Clear it fast to end the wave early.<br>Receding: the water drains, then the next wave starts.`,
+    tipWave: (n, w) => `<span class="t">Wave ${n} / ${WAVES.length}</span>
+      Inflow ×${w.energy} · Flow speed ×${w.speed} · Prep ${w.prep}s`,
+    tipSuper: () => `<span class="t">🛰️ Orbital Ion Cannon</span>Clears all water within radius ${SUPER.radius} and briefly freezes it.<br>
+      Cooldown ${SUPER.cd}s · Needs a Tech Center and a Super Base · Hotkey R`,
+    tipPause: p => p ? 'Resume (P / Space)' : 'Pause (P / Space)',
+    tipBox: s => `<span class="t">📦 Supply box</span>Click for +10–17 materials · disappears in ${s} s`,
+    tipHome: h => `<span class="t">🏠 Home</span>Water depth <b>${h}</b>. Above ${LOSE_DEPTH} you lose.`,
+    tipWater: (h, frozen) => `<span class="t">🌊 Water depth ${h}</span>${frozen ? 'Frozen: it does not flow.' : ''}`,
+  },
+};
+
+const LANG_KEY = 'tsunami.lang';
+function savedLang(){
+  try { const v = localStorage.getItem(LANG_KEY); return STR[v] ? v : null; } catch(e){ return null; }
+}
+let LANG = savedLang() || 'zh-Hant';
+function L(){ return STR[LANG]; }
+function bname(id){ return L().names[id]; }
+function applyLang(lang){
+  LANG = lang;
+  document.documentElement.lang = lang;
+  document.title = L().title;
+  buildUI();
+  updateUI();
+}
+// 玩家選擇語言時才記住
+function setLang(lang){
+  try { localStorage.setItem(LANG_KEY, lang); } catch(e){}
+  applyLang(lang);
+}
+
+/* ══════════════ 開始畫面 ══════════════ */
+function showMenu(){
+  const ov = document.getElementById('overlay');
+  ov.classList.remove('hidden');
+  ov.innerHTML = `<h1>${L().menuH1}</h1><h2>${L().menuH2}</h2><p>${L().menuP()}</p>
+    <button id="startBtn">${L().start}</button>
+    <div id="langLink">${L().changeLang}</div>`;
+  document.getElementById('startBtn').onclick = () => savedLang() ? startGame() : showLangPicker();
+  document.getElementById('langLink').onclick = showLangPicker;
+}
+
+// 第一次開始遊戲時詢問語言；之後記住選擇
+function showLangPicker(){
+  const ov = document.getElementById('overlay');
+  ov.innerHTML = `<h2>${L().pickLang}</h2>
+    <div class="langs"><button class="langBtn" data-lang="zh-Hant">繁體中文</button>
+    <button class="langBtn" data-lang="en">English</button></div>`;
+  ov.querySelectorAll('.langBtn').forEach(b => {
+    b.onclick = () => { setLang(b.dataset.lang); showMenu(); };
+  });
+}
+
 /* ══════════════ 遊戲流程 ══════════════ */
 function startGame(){
   init();
@@ -304,7 +467,7 @@ function startWave(){
   G.inflowEnd = INFLOW_END * w.energy;
   G.boxes.length = 0;
   G.shake = 8;
-  toast(`⚠ 第 ${G.wave+1} 波海嘯來襲！`, true);
+  toast(L().tWaveIncoming(G.wave+1), true);
   updateUI();
 }
 
@@ -313,16 +476,14 @@ function endGame(win){
   const ov = document.getElementById('overlay');
   ov.classList.remove('hidden');
   ov.innerHTML = win
-    ? `<h1>守 住 了</h1><h2 style="color:#5fd4ff">村 莊 平 安</h2>
-       <p>${WAVES.length} 波海嘯全部擋下，你的家完好無損。<br>
-          剩餘材料：<span class="hi">${Math.floor(G.materials)}</span></p>
-       <button id="startBtn">再 玩 一 次</button>`
+    ? `<h1>${L().winH1}</h1><h2 style="color:#5fd4ff">${L().winH2}</h2>
+       <p>${L().winP(Math.floor(G.materials))}</p>
+       <button id="startBtn">${L().again}</button>`
     : `<h1 style="background:linear-gradient(180deg,#ff9a9a,#a01515);
-        -webkit-background-clip:text;background-clip:text">家 園 已 毀</h1>
-       <h2 style="color:#ff6b6b">海 嘯 吞 沒 了 一 切</h2>
-       <p>在第 <span class="warn">${G.wave+1}</span> 波倒下。<br>
-          試著用塔的射程覆蓋缺口，並注意水會繞過障礙物。</p>
-       <button id="startBtn">重 新 挑 戰</button>`;
+        -webkit-background-clip:text;background-clip:text">${L().loseH1}</h1>
+       <h2 style="color:#ff6b6b">${L().loseH2}</h2>
+       <p>${L().loseP(G.wave+1)}</p>
+       <button id="startBtn">${L().retry}</button>`;
   document.getElementById('startBtn').onclick = () => { startGame(); };
 }
 
@@ -443,8 +604,8 @@ function canPlace(def, gx, gy){
 function placeEntity(defId, gx, gy){
   const def = DEFS[defId];
   if(!def) return false;
-  if(G.materials < def.cost){ toast('材料不足', true); return false; }
-  if(!canPlace(def, gx, gy)){ toast('這裡無法建造'); return false; }
+  if(G.materials < def.cost){ toast(L().tNoMats, true); return false; }
+  if(!canPlace(def, gx, gy)){ toast(L().tCantBuild); return false; }
 
   G.materials -= def.cost;
   const ent = {
@@ -716,7 +877,7 @@ function update(dt){
         G.boxTimer = 0;
         G.water.fill(0);
         G.freeze.fill(0);
-        toast(`第 ${G.wave+1} 波即將來臨 — 準備時間 ${WAVES[G.wave].prep} 秒`, true);
+        toast(L().tNextWave(G.wave+1, WAVES[G.wave].prep), true);
       }
     }
   }
@@ -786,7 +947,7 @@ canvas.addEventListener('pointerdown', e => {
       const amt = 10 + Math.floor(Math.random()*8);
       G.materials += amt;
       spawnParticles(gx*TX+TX/2, gy*TY+TY/2, 6, '#ffd166', 100);
-      toast(`+${amt} 材料`);
+      toast(L().tMats(amt));
       G.boxes.splice(i,1);
       return;
     }
@@ -794,8 +955,8 @@ canvas.addEventListener('pointerdown', e => {
 
   // 2. 超級武器瞄準
   if(G.superAim){
-    if(!G.superUnlocked){ toast('尚未解鎖超級武器', true); return; }
-    if(G.superCD > 0){ toast(`冷卻中 ${Math.ceil(G.superCD)}s`, true); return; }
+    if(!G.superUnlocked){ toast(L().tSuperLocked, true); return; }
+    if(G.superCD > 0){ toast(L().tCooldown(Math.ceil(G.superCD)), true); return; }
     fireSuper(gx, gy);
     G.superAim = false;
     updateUI();
@@ -822,7 +983,7 @@ window.addEventListener('keydown', e => {
   if(G.paused) return;
   for(const id in DEFS){
     if(DEFS[id].key === k){
-      if(id === 'superbase' && !G.techUnlocked){ toast('需要先建造科技中心', true); return; }
+      if(id === 'superbase' && !G.techUnlocked){ toast(L().tNeedTech, true); return; }
       G.selectedBuild = G.selectedBuild === id ? null : id;
       G.superAim = false;
       updateUI();
@@ -842,21 +1003,6 @@ window.addEventListener('keydown', e => {
 });
 
 /* ══════════════ 提示 ══════════════ */
-const ROLE = {
-  sandbag:  '便宜的擋水牆，適合快速封住缺口。',
-  tree:     '中等擋水，比沙包耐打。',
-  wall:     '高血量擋水牆。',
-  dike:     '血量最高，適合補在最多水衝擊的位置。',
-  mg:       '高射速，每發清走射程內最深一格的水。',
-  rocket:   '範圍爆炸，清走目標周圍多格的水。',
-  frost:    '持續光束：清水並凍結水格，凍結的水不會流動。',
-  dump:     '準備階段每 14 秒生產一輛垃圾車，自動撿物資箱（最多 5 輛）。需電力充足。',
-  power:    '提供電力。',
-  recycle:  '準備階段每秒 +2 材料（電力不足時減半）。',
-  tech:     '解鎖超級武器基地。',
-  superbase:'解鎖軌道離子炮。',
-};
-
 // 供電為正、耗電為負
 function powerOf(id){
   const d = DEFS[id];
@@ -869,37 +1015,30 @@ function powerOf(id){
 }
 
 function defTip(id, ent){
-  const d = DEFS[id], pw = powerOf(id);
+  const d = DEFS[id], pw = powerOf(id), T = L();
   const hp = ent ? `${Math.ceil(ent.hp)} / ${ent.maxHp}` : d.hp;
-  const st = [`成本 <b>${d.cost}</b>`, `血量 <b>${hp}</b>`];
-  if(d.size === 2) st.push('佔地 2×2');
-  if(pw > 0) st.push(`供電 <b>+${pw}</b>`);
-  else if(pw < 0) st.push(`耗電 <b>${-pw}</b>`);
-  const lines = [`<span class="t">${d.name}</span>${ROLE[id]}`, st.join(' · ')];
-  if(d.tower === 'frost') lines.push(`射程 ${d.range} · 每秒清水 ${d.dmg}`);
-  else if(d.tower) lines.push(`射程 ${d.range} · 每發清水 ${d.dmg} · 冷卻 ${d.cd}s`);
-  if(!ent && d.key) lines.push(`快捷鍵 ${d.key}`);
+  const st = [`${T.cost} <b>${d.cost}</b>`, `${T.hp} <b>${hp}</b>`];
+  if(d.size === 2) st.push(T.size2);
+  if(pw > 0) st.push(`${T.supply} <b>+${pw}</b>`);
+  else if(pw < 0) st.push(`${T.use} <b>${-pw}</b>`);
+  const lines = [`<span class="t">${bname(id)}</span>${T.role[id]}`, st.join(' · ')];
+  if(d.tower === 'frost') lines.push(T.frostStats(d));
+  else if(d.tower) lines.push(T.towerStats(d));
+  if(!ent && d.key) lines.push(T.hotkey(d.key));
   return lines.join('<br>');
 }
 
 function tipFor(key){
   if(key.startsWith('b:')) return defTip(key.slice(2));
-  const w = WAVES[Math.min(G.wave, WAVES.length-1)];
+  const T = L(), w = WAVES[Math.min(G.wave, WAVES.length-1)];
   switch(key){
-    case 'mats': return `<span class="t">🪵 材料 ${Math.floor(G.materials)}</span>用來建造。<br>
-      準備階段每秒 +<b>${BASE_INCOME}</b>，每座回收站再 +2。<br>點擊物資箱 +10–17。`;
-    case 'power': return `<span class="t">⚡ 電力 耗電 ${G.power.cons} / 供電 ${G.power.prod}</span>
-      ${G.power.ok ? '電力充足。' : '<b>電力不足！</b>'}<br>
-      不足時回收站收益減半、垃圾場停止生產垃圾車。塔不受影響。`;
-    case 'trucks': return `<span class="t">🚛 垃圾車 ${G.trucks.length} / ${MAX_TRUCKS}</span>
-      由垃圾場在準備階段生產，自動撿物資箱。`;
-    case 'phase': return `<span class="t">波次流程</span>準備：建造、撿物資箱。<br>
-      海嘯：右側注水，之後積水慢慢滲退；水清得快，波次就早完結。<br>退水：海水退去，進入下一波。`;
-    case 'wave': return `<span class="t">第 ${Math.min(G.wave+1, WAVES.length)} / ${WAVES.length} 波</span>
-      注水時長 ×${w.energy} · 水流速度 ×${w.speed} · 準備 ${w.prep}s`;
-    case 'super': return `<span class="t">🛰️ ${SUPER.name}</span>清空半徑 ${SUPER.radius} 內的水並短暫凍結。<br>
-      冷卻 ${SUPER.cd}s · 需要科技中心與超級武器基地 · 快捷鍵 R`;
-    case 'pause': return G.paused ? '繼續（P / Space）' : '暫停（P / Space）';
+    case 'mats':   return T.tipMats(Math.floor(G.materials));
+    case 'power':  return T.tipPower(G.power);
+    case 'trucks': return T.tipTrucks(G.trucks.length);
+    case 'phase':  return T.tipPhase;
+    case 'wave':   return T.tipWave(Math.min(G.wave+1, WAVES.length), w);
+    case 'super':  return T.tipSuper();
+    case 'pause':  return T.tipPause(G.paused);
   }
   return '';
 }
@@ -910,10 +1049,10 @@ function worldTip(gx, gy){
   const ent = G.grid[gx][gy];
   if(ent) return defTip(ent.defId, ent);
   const box = G.boxes.find(b => b.x === gx && b.y === gy);
-  if(box) return `<span class="t">📦 物資箱</span>點擊 +10–17 材料 · ${Math.ceil(box.life)} 秒後消失`;
+  if(box) return L().tipBox(Math.ceil(box.life));
   const h = G.water[idx(gx,gy)];
-  if(inHome(gx,gy)) return `<span class="t">🏠 我的家</span>水深 <b>${h.toFixed(2)}</b>，超過 ${LOSE_DEPTH} 即失敗。`;
-  if(h > 0.02) return `<span class="t">🌊 水深 ${h.toFixed(2)}</span>${G.freeze[idx(gx,gy)] > 0 ? '已凍結，不會流動。' : ''}`;
+  if(inHome(gx,gy)) return L().tipHome(h.toFixed(2));
+  if(h > 0.02) return L().tipWater(h.toFixed(2), G.freeze[idx(gx,gy)] > 0);
   return '';
 }
 
@@ -973,7 +1112,7 @@ function fireSuper(gx, gy){
     t:0, dur:1.6, r: R*TX,
   });
   G.shake = 26;
-  toast('⚡ 軌道離子炮發射！', true);
+  toast(L().tSuperFire, true);
 }
 
 /* ══════════════ 提示 ══════════════ */
@@ -1036,10 +1175,10 @@ function render(){
     ctx.fillStyle = '#dff4ff';
     ctx.textAlign = 'center';
     ctx.font = '700 36px sans-serif';
-    ctx.fillText('暫 停', canvas.width/2, canvas.height/2);
+    ctx.fillText(L().paused, canvas.width/2, canvas.height/2);
     ctx.font = '13px sans-serif';
     ctx.fillStyle = '#8fb3cc';
-    ctx.fillText('按 P / Space 或 ▶ 繼續', canvas.width/2, canvas.height/2 + 28);
+    ctx.fillText(L().pausedHint, canvas.width/2, canvas.height/2 + 28);
     ctx.textAlign = 'left';
   }
 }
@@ -1173,7 +1312,7 @@ function drawHome(){
   ctx.fillStyle = '#ffffff';
   ctx.textAlign = 'center';
   ctx.globalAlpha = 0.9;
-  ctx.fillText('🏠 我的家', px+pw/2, py-H-4);
+  ctx.fillText(L().home, px+pw/2, py-H-4);
   ctx.globalAlpha = 1;
   ctx.textAlign = 'left';
 }
@@ -1652,7 +1791,7 @@ function drawPreview(){
   ctx.fillStyle = '#fff';
   ctx.font = 'bold 10px sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText(def.name, sx+sw/2, sy+sh/2-2);
+  ctx.fillText(bname(G.selectedBuild), sx+sw/2, sy+sh/2-2);
   ctx.textAlign = 'left';
 }
 
@@ -1672,10 +1811,10 @@ function buildUI(){
     if(pw > 0) extra.push(`+${pw}⚡`);
     else if(pw < 0) extra.push(`⚡${-pw}`);
     el.innerHTML = `<span class="key">${d.key || ''}</span>
-      <span class="nm">${d.name}</span>
+      <span class="nm">${bname(id)}</span>
       <span class="cost">🪵${d.cost} ${extra.join(' ')}</span>`;
     el.onclick = () => {
-      if(id === 'superbase' && !G.techUnlocked){ toast('需要先建造科技中心', true); return; }
+      if(id === 'superbase' && !G.techUnlocked){ toast(L().tNeedTech, true); return; }
       G.selectedBuild = G.selectedBuild === id ? null : id;
       G.superAim = false;
       updateUI();
@@ -1691,12 +1830,12 @@ function buildUI(){
   su.dataset.tip = 'super';
   su.style.width = '228px';
   su.innerHTML = `<span class="key">R</span>
-    <span class="nm">🛰️ 軌道離子炮</span>
-    <span class="cost">半徑 ${SUPER.radius} · CD ${SUPER.cd}s</span>
+    <span class="nm">🛰️ ${bname('super')}</span>
+    <span class="cost">${L().superBtn()}</span>
     <div class="cdmask" style="display:none"></div>`;
   su.onclick = () => {
-    if(!G.superUnlocked){ toast('需要先建造科技中心與超級武器基地', true); return; }
-    if(G.superCD > 0){ toast(`冷卻中 ${Math.ceil(G.superCD)}s`, true); return; }
+    if(!G.superUnlocked){ toast(L().tNeedSuper, true); return; }
+    if(G.superCD > 0){ toast(L().tCooldown(Math.ceil(G.superCD)), true); return; }
     G.superAim = !G.superAim;
     G.selectedBuild = null;
     updateUI();
@@ -1712,22 +1851,22 @@ function updateUI(){
 
   document.getElementById('unitTxt').textContent = `${G.trucks.length}/${MAX_TRUCKS}`;
   document.getElementById('waveTxt').textContent =
-    `第 ${Math.min(G.wave+1, WAVES.length)} / ${WAVES.length} 波`;
+    L().wave(Math.min(G.wave+1, WAVES.length), WAVES.length);
 
   const phasePill = document.getElementById('phasePill');
   const phaseTxt = document.getElementById('phaseTxt');
   const timerTxt = document.getElementById('timerTxt');
 
   if(G.phase === 'prep'){
-    phaseTxt.textContent = '準備階段';
+    phaseTxt.textContent = L().phasePrep;
     phasePill.classList.remove('danger');
     timerTxt.textContent = Math.ceil(Math.max(0,G.timer)) + 's';
   } else if(G.phase === 'tsunami'){
-    phaseTxt.textContent = '⚠ 海嘯來襲';
+    phaseTxt.textContent = L().phaseTsunami;
     phasePill.classList.add('danger');
     timerTxt.textContent = '——';
   } else if(G.phase === 'drain'){
-    phaseTxt.textContent = '海水退去…';
+    phaseTxt.textContent = L().phaseDrain;
     phasePill.classList.remove('danger');
     timerTxt.textContent = '——';
   }
@@ -1777,11 +1916,9 @@ function loop(now){
 /* ══════════════ 啟動 ══════════════ */
 renderGround();
 init();
-buildUI();
+applyLang(LANG);
 fit();
-updateUI();
-
-document.getElementById('startBtn').onclick = () => startGame();
+showMenu();
 
 requestAnimationFrame(t => { lastT = t; loop(t); });
 
