@@ -35,7 +35,9 @@
   loseP: w => `在第 <span class="warn">${w}</span> 波倒下。<br>試著用塔的射程覆蓋缺口，並注意水會繞過障礙物。`,
   wave: (n, total) => `第 ${n} / ${total} 波`,
   phasePrep: '準備階段', phaseTsunami: '⚠ 海嘯來襲', phaseDrain: '海水退去…',
+  phaseSurge: (n, total) => `⚠ 湧浪 ${n} / ${total}`, phaseNextSurge: '下一道湧浪',
   tWaveIncoming: n => `⚠ 第 ${n} 波海嘯來襲！`,
+  tSurgeWarn: (n, s) => `⚠ 第 ${n} 道湧浪 ${s} 秒後到達！`,
   tNextWave: (n, s) => `第 ${n} 波即將來臨 — 準備時間 ${s} 秒`,
   tNoMats: '材料不足', tCantBuild: '這裡無法建造', tMats: n => `+${n} 材料`,
   tSuperLocked: '尚未解鎖超級武器', tCooldown: s => `冷卻中 ${s}s`,
@@ -55,9 +57,11 @@
     不足時回收站收益減半、垃圾場停止生產垃圾車。塔不受影響。`,
   tipTrucks: n => `<span class="t">🚛 垃圾車 ${n} / ${MAX_TRUCKS}</span>由垃圾場在準備階段生產，自動撿物資箱。`,
   tipPhase: `<span class="t">波次流程</span>準備：建造、撿物資箱。<br>
-    海嘯：右側注水，之後積水慢慢滲退；水清得快，波次就早完結。<br>退水：海水退去，進入下一波。`,
-  tipWave: (n, w) => `<span class="t">第 ${n} / ${WAVES.length} 波</span>
-    注水時長 ×${w.energy} · 水流速度 ×${w.speed} · 準備 ${w.prep}s`,
+    海嘯：分幾道湧浪從右側注水，中間有短暫間隔；第一道往往不是最大。<br>
+    最後一道湧浪過後積水慢慢滲退；水清得快，波次就早完結。<br>退水：海水退去，進入下一波。`,
+  // Biggest surge = highest dur * power (1-based).
+  tipWave: (n, w, big = w.pulses.reduce((b, s, k, a) => s.dur * s.power > a[b].dur * a[b].power ? k : b, 0) + 1) => `<span class="t">第 ${n} / ${WAVES.length} 波</span>
+    ${w.pulses.length} 道湧浪${w.pulses.length === 1 ? '' : ` · 最大：第 ${big} 道`} · 水流速度 ×${w.speed} · 準備 ${w.prep}s`,
   tipSuper: () => `<span class="t">🛰️ 軌道離子炮</span>清空半徑 ${SUPER.radius} 內的水並短暫凍結。<br>
     冷卻 ${SUPER.cd}s · 需要科技中心與超級武器基地 · 快捷鍵 R`,
   tipPause: p => p ? '繼續（P / Space）' : '暫停（P / Space）',
