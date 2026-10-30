@@ -35,7 +35,9 @@
   loseP: w => `Fell on wave <span class="warn">${w}</span>.<br>Cover gaps with tower range, and watch for water flowing around obstacles.`,
   wave: (n, total) => `Wave ${n} / ${total}`,
   phasePrep: 'Prep', phaseTsunami: '⚠ Tsunami!', phaseDrain: 'Water receding…',
+  phaseSurge: (n, total) => `⚠ Surge ${n} / ${total}`, phaseNextSurge: 'Next surge',
   tWaveIncoming: n => `⚠ Wave ${n} incoming!`,
+  tSurgeWarn: (n, s) => `⚠ Surge ${n} in ${s} s!`,
   tNextWave: (n, s) => `Wave ${n} is coming — ${s} s to prepare`,
   tNoMats: 'Not enough materials', tCantBuild: "Can't build here", tMats: n => `+${n} materials`,
   tSuperLocked: 'Super weapon not unlocked', tCooldown: s => `Cooling down ${s}s`,
@@ -55,7 +57,8 @@
     When short, Recyclers earn half and Dumps stop making trucks. Towers are not affected.`,
   tipTrucks: n => `<span class="t">🚛 Trucks ${n} / ${MAX_TRUCKS}</span>Made by Dumps during prep. They pick up supply boxes.`,
   tipPhase: `<span class="t">How a wave works</span>Prep: build and collect boxes.<br>
-    Tsunami: water pours in from the right, then slowly seeps away. Clear it fast to end the wave early.<br>Receding: the water drains, then the next wave starts.`,
+    Tsunami: water pours in from the right in several surges, with short gaps between. The first is often not the biggest.<br>
+    After the last surge the water slowly seeps away. Clear it fast to end the wave early.<br>Receding: the water drains, then the next wave starts.`,
   tipWave: (n, w) => `<span class="t">Wave ${n} / ${WAVES.length}</span>
     ${w.pulses.length} ${w.pulses.length === 1 ? 'surge' : 'surges'} · Total inflow ${w.pulses.reduce((a,s)=>a+s.dur,0)} · Flow speed ×${w.speed} · Prep ${w.prep}s`,
   tipSuper: () => `<span class="t">🛰️ Orbital Ion Cannon</span>Clears all water within radius ${SUPER.radius} and briefly freezes it.<br>

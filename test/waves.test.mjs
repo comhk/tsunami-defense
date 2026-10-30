@@ -145,3 +145,76 @@ test('materials do not increase during gaps between surges', () => {
     assert.ok(checked > 0, `wave ${n + 1}: never observed a gap`);
   }
 });
+
+// ── HUD surge counter and warnings (ticket 03) ──
+const hud = game => ({
+  phase: game.document.getElementById('phaseTxt').textContent,
+  timer: game.document.getElementById('timerTxt').textContent,
+});
+
+// Step the current wave until its progress reaches p (bounded).
+function stepTo(game, p){
+  const { hook, G } = game;
+  for(let i = 0; i < 60 * 600 && G.phase === 'tsunami' && G.waveProgress < p; i++) hook.update(DT);
+}
+
+test('HUD shows the surge counter while a surge pours, in both languages', () => {
+  const expected = { en: ['⚠ Surge 1 / 3', '⚠ Surge 2 / 3'], 'zh-Hant': ['⚠ 湧浪 1 / 3', '⚠ 湧浪 2 / 3'] };
+  for(const lang of ['en', 'zh-Hant']){
+    const game = startWaveN(4, { lang });  // wave 5: surges at [0,7] [11,12] [27,9], speed 1.4
+    stepTo(game, 3);
+    assert.deepEqual(hud(game), { phase: expected[lang][0], timer: '——' });
+    stepTo(game, 15);
+    assert.deepEqual(hud(game), { phase: expected[lang][1], timer: '——' });
+  }
+});
+
+test('HUD counts down real seconds to the next surge during a gap, then shows the tsunami label', () => {
+  const expected = {
+    en: { next: 'Next surge', after: '⚠ Tsunami!' },
+    'zh-Hant': { next: '下一道湧浪', after: '⚠ 海嘯來襲' },
+  };
+  for(const lang of ['en', 'zh-Hant']){
+    const game = startWaveN(4, { lang });  // wave 5: gap 7→11 at speed 1.4
+    stepTo(game, 7.2);   // (11 - 7.2) / 1.4 ≈ 2.7 s
+    assert.deepEqual(hud(game), { phase: expected[lang].next, timer: '3s' });
+    stepTo(game, 9.7);   // (11 - 9.7) / 1.4 ≈ 0.9 s
+    assert.deepEqual(hud(game), { phase: expected[lang].next, timer: '1s' });
+    stepTo(game, 36.5);  // after the last surge (27 + 9)
+    assert.deepEqual(hud(game), { phase: expected[lang].after, timer: '——' });
+  }
+});
+
+test('both language files define the same set of keys', () => {
+  const { window, hook } = loadGame();
+  const consts = { SUPER: {}, WAVES: hook.WAVES, BASE_INCOME: 0, MAX_TRUCKS: 0, LOSE_DEPTH: 0 };
+  const keys = lang => Object.keys(window.TSUNAMI_LANGS[lang](consts)).sort();
+  assert.deepEqual(keys('zh-Hant'), keys('en'));
+  assert.ok(keys('en').includes('phaseSurge') && keys('en').includes('tSurgeWarn'));
+});
+
+test('a warning toast appears once, about 3 s before each surge after the first', () => {
+  for(let n = 0; n < SURGE_COUNTS.length; n++){
+    const game = startWaveN(n);
+    const { hook, G } = game;
+    const w = hook.WAVES[n];
+    const toastEl = game.document.getElementById('toast');
+    const warnings = [];  // { text, secsBefore[] } for each new toast during the wave
+    let last = toastEl.textContent;
+    for(let i = 0; i < 60 * 600 && G.phase === 'tsunami'; i++){
+      const p = G.waveProgress;
+      hook.update(DT);
+      if(toastEl.textContent !== last){
+        last = toastEl.textContent;
+        warnings.push({ text: last, p });
+      }
+    }
+    const later = [...w.pulses].slice(1);  // spread: vm arrays are from another realm
+    assert.deepEqual(warnings.map(t => t.text), later.map((_, k) => `⚠ Surge ${k + 2} in 3 s!`),
+      `wave ${n + 1}: unexpected toasts`);
+    warnings.forEach((t, k) => {
+      const secsBefore = (later[k].at - t.p) / w.speed;
+      assert.ok(Math.abs(secsBefore - 3) < 0.05, `wave ${n + 1}: warning ${secsBefore.toFixed(2)} s before surge ${k + 2}`);
+    });
+  }
+});

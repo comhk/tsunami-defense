@@ -135,7 +135,8 @@ const WATER_MAX = 1.4;
 const FLOW_INTERVAL = 0.075;         // 每 75ms 一步水流
 const HOME = { x: 1, y: 8, w: 3, h: 4 };
 const LOSE_DEPTH = 0.55;             // 家前水深刻度即失敗
-const TSUNAMI_MAX = 12;              // 停止注水後最多再等的波次進度
+const SURGE_WARN = 3;                // 後續湧浪到達前幾秒（實際時間）出警告
+const TSUNAMI_MAX = 12;             // 停止注水後最多再等的波次進度
 const SEEP_KEEP = 0.7;               // 湧浪之間及之後每秒保留的水量比例
 const DRAIN_KEEP = 0.35;             // 退水階段每秒保留的水量比例
 const FLOW_RATE = 0.55;              // 每步流向下一格的水量比例
@@ -376,6 +377,16 @@ function endGame(win){
   document.getElementById('startBtn').onclick = () => { startGame(); };
 }
 
+// 第一道之後的每道湧浪：到達前約 SURGE_WARN 秒（實際時間）出警告提示，到達時震動畫面
+function surgeCues(w, p0, p1){
+  for(let k = 1; k < w.pulses.length; k++){
+    const at = w.pulses[k].at;
+    const warnAt = at - SURGE_WARN * G.waveSpeed;
+    if(p0 < warnAt && p1 >= warnAt) toast(L().tSurgeWarn(k+1, SURGE_WARN), true);
+    if(p0 < at && p1 >= at) G.shake = 8;
+  }
+}
+
 /* ══════════════ 水體模擬 ══════════════ */
 function updateWater(dt){
   // 海嘯階段：湧浪期間從右側注入；強度 > 1 的湧浪提高注水上限（最多至滿水深）
@@ -391,7 +402,9 @@ function updateWater(dt){
     }
   }
   if(G.phase === 'tsunami'){
+    const p0 = G.waveProgress;
     G.waveProgress += dt * G.waveSpeed;
+    surgeCues(WAVES[G.wave], p0, G.waveProgress);
     // 滲水：湧浪之間及最後一道湧浪後，積水緩慢消退
     if(!pulse) decayWater(SEEP_KEEP, dt);
   }
@@ -1755,9 +1768,21 @@ function updateUI(){
     phasePill.classList.remove('danger');
     timerTxt.textContent = Math.ceil(Math.max(0,G.timer)) + 's';
   } else if(G.phase === 'tsunami'){
-    phaseTxt.textContent = L().phaseTsunami;
+    // 湧浪中顯示「湧浪 n / N」；間隔中倒數到下一道湧浪（實際秒數）；最後一道湧浪後沿用海嘯標籤
+    const w = WAVES[G.wave];
+    const k = pulseIndexAt(w, G.waveProgress);
+    const next = nextPulseIndex(w, G.waveProgress);
     phasePill.classList.add('danger');
-    timerTxt.textContent = '——';
+    if(k >= 0){
+      phaseTxt.textContent = L().phaseSurge(k+1, w.pulses.length);
+      timerTxt.textContent = '——';
+    } else if(next >= 0){
+      phaseTxt.textContent = L().phaseNextSurge;
+      timerTxt.textContent = Math.ceil((w.pulses[next].at - G.waveProgress) / G.waveSpeed) + 's';
+    } else {
+      phaseTxt.textContent = L().phaseTsunami;
+      timerTxt.textContent = '——';
+    }
   } else if(G.phase === 'drain'){
     phaseTxt.textContent = L().phaseDrain;
     phasePill.classList.remove('danger');
