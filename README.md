@@ -35,7 +35,12 @@ python -m http.server 8000
 # http://localhost:8000
 ```
 
-線上遊玩：<https://cchpucky1984.github.io/tsunami-defense/>
+線上遊玩：<https://comhk.github.io/tsunami-defense/>
+
+## 發佈
+
+每次 push 到 `main`，GitHub Actions（`.github/workflows/pages.yml`）會自動把 `index.html` 發佈到 GitHub Pages。
+只發佈遊戲本身，`docs/`、`.scratch/` 不會公開。
 
 ## 結構
 
@@ -43,6 +48,7 @@ python -m http.server 8000
 index.html   # 全部遊戲邏輯、渲染、UI（Canvas 2D，半 3D 等角擠出繪製）
 docs/        # 遊戲研究筆記、agent 設定
 .scratch/    # 本地 issue（markdown）
+.github/     # GitHub Pages 自動發佈 workflow
 ```
 
 ## 參數速查（改數值就喺 `index.html` 頂部）
