@@ -26,7 +26,8 @@
   #phasePill.danger{border-color:#ff4d4d;color:#ff8080;animation:pulse .6s infinite}
   @keyframes pulse{50%{background:rgba(120,20,20,.8)}}
   #spacer{flex:1}
-  #pauseBtn{cursor:pointer;user-select:none;pointer-events:auto}
+  #hud .pill{pointer-events:auto}
+  #pauseBtn{cursor:pointer;user-select:none}
   #pauseBtn:hover{border-color:rgba(120,210,255,.85)}
 
   /* 工具列 */
@@ -79,6 +80,13 @@
     padding:5px 16px;color:#dff4ff;font-size:12px;opacity:0;pointer-events:none;
     transition:opacity .25s;white-space:nowrap;z-index:40}
   #toast.show{opacity:1}
+
+  /* 提示 */
+  #tip{position:absolute;z-index:45;max-width:250px;padding:6px 10px;
+    background:rgba(8,18,28,.95);border:1px solid rgba(95,212,255,.6);border-radius:6px;
+    color:#cfe4f5;font-size:11px;line-height:1.65;pointer-events:none;display:none}
+  #tip b{color:#ffd166}
+  #tip .t{display:block;font-weight:700;color:#eaf6ff;font-size:12px}
 </style>
 </head>
 <body>
@@ -86,14 +94,14 @@
   <canvas id="game" width="960" height="520"></canvas>
 
   <div id="hud">
-    <div class="pill"><span>🪵</span><b id="mats">0</b></div>
-    <div class="pill" id="powerPill"><span>⚡</span><b id="powerTxt">0/0</b></div>
-    <div class="pill"><span>🚛</span><b id="unitTxt">0</b></div>
-    <div class="pill" id="phasePill"><span id="phaseTxt">準備階段</span></div>
-    <div class="pill"><span id="timerTxt">45s</span></div>
+    <div class="pill" data-tip="mats"><span>🪵</span><b id="mats">0</b></div>
+    <div class="pill" id="powerPill" data-tip="power"><span>⚡</span><b id="powerTxt">0/0</b></div>
+    <div class="pill" data-tip="trucks"><span>🚛</span><b id="unitTxt">0</b></div>
+    <div class="pill" id="phasePill" data-tip="phase"><span id="phaseTxt">準備階段</span></div>
+    <div class="pill" data-tip="phase"><span id="timerTxt">45s</span></div>
     <div id="spacer"></div>
-    <div class="pill"><span id="waveTxt">第 1 / 5 波</span></div>
-    <div class="pill" id="pauseBtn" title="暫停 (P / Space)">⏸</div>
+    <div class="pill" data-tip="wave"><span id="waveTxt">第 1 / 5 波</span></div>
+    <div class="pill" id="pauseBtn" data-tip="pause">⏸</div>
   </div>
 
   <div id="toolbar">
@@ -102,6 +110,7 @@
   </div>
 
   <div id="toast"></div>
+  <div id="tip"></div>
 
   <div id="overlay">
     <h1>海 嘯</h1>
@@ -718,29 +727,12 @@ function update(dt){
 function calcPower(){
   let prod = 0, cons = 0;
   for(const s of G.structures){
-    const p = s.def.power || 0;
-    if(p < 0) prod += -p;
-    else cons += p;
-    // 塔的耗電
-    if(s.def.tower) cons += 3;
-    if(s.def.producer) cons += 5;
-    if(s.def.income) cons += 5;
-    if(s.defId === 'tech') cons += 10;
-    if(s.defId === 'superbase') cons += 15;
+    const p = powerOf(s.defId);
+    if(p > 0) prod += p; else cons -= p;
   }
-  // 發電廠是正電，其他是耗電
-  let realProd = 0, realCons = 0;
-  for(const s of G.structures){
-    if(s.def.power > 0) realProd += s.def.power;
-    if(s.def.tower) realCons += 3;
-    if(s.def.producer) realCons += 5;
-    if(s.def.income) realCons += 5;
-    if(s.defId === 'tech') realCons += 10;
-    if(s.defId === 'superbase') realCons += 15;
-  }
-  G.power.prod = realProd;
-  G.power.cons = realCons;
-  G.power.ok = realCons <= realProd;
+  G.power.prod = prod;
+  G.power.cons = cons;
+  G.power.ok = cons <= prod;
 }
 
 /* ══════════════ 物資箱 ══════════════ */
@@ -849,6 +841,102 @@ window.addEventListener('keydown', e => {
   }
 });
 
+/* ══════════════ 提示 ══════════════ */
+const ROLE = {
+  sandbag:  '便宜的擋水牆，適合快速封住缺口。',
+  tree:     '中等擋水，比沙包耐打。',
+  wall:     '高血量擋水牆。',
+  dike:     '血量最高，適合補在最多水衝擊的位置。',
+  mg:       '高射速，每發清走射程內最深一格的水。',
+  rocket:   '範圍爆炸，清走目標周圍多格的水。',
+  frost:    '持續光束：清水並凍結水格，凍結的水不會流動。',
+  dump:     '準備階段每 14 秒生產一輛垃圾車，自動撿物資箱（最多 5 輛）。需電力充足。',
+  power:    '提供電力。',
+  recycle:  '準備階段每秒 +2 材料（電力不足時減半）。',
+  tech:     '解鎖超級武器基地。',
+  superbase:'解鎖軌道離子炮。',
+};
+
+// 供電為正、耗電為負
+function powerOf(id){
+  const d = DEFS[id];
+  if(d.power) return d.power;
+  if(d.tower) return -3;
+  if(d.producer || d.income) return -5;
+  if(id === 'tech') return -10;
+  if(id === 'superbase') return -15;
+  return 0;
+}
+
+function defTip(id, ent){
+  const d = DEFS[id], pw = powerOf(id);
+  const hp = ent ? `${Math.ceil(ent.hp)} / ${ent.maxHp}` : d.hp;
+  const st = [`成本 <b>${d.cost}</b>`, `血量 <b>${hp}</b>`];
+  if(d.size === 2) st.push('佔地 2×2');
+  if(pw > 0) st.push(`供電 <b>+${pw}</b>`);
+  else if(pw < 0) st.push(`耗電 <b>${-pw}</b>`);
+  const lines = [`<span class="t">${d.name}</span>${ROLE[id]}`, st.join(' · ')];
+  if(d.tower === 'frost') lines.push(`射程 ${d.range} · 每秒清水 ${d.dmg}`);
+  else if(d.tower) lines.push(`射程 ${d.range} · 每發清水 ${d.dmg} · 冷卻 ${d.cd}s`);
+  if(!ent && d.key) lines.push(`快捷鍵 ${d.key}`);
+  return lines.join('<br>');
+}
+
+function tipFor(key){
+  if(key.startsWith('b:')) return defTip(key.slice(2));
+  const w = WAVES[Math.min(G.wave, WAVES.length-1)];
+  switch(key){
+    case 'mats': return `<span class="t">🪵 材料 ${Math.floor(G.materials)}</span>用來建造。<br>
+      準備階段每秒 +<b>${BASE_INCOME}</b>，每座回收站再 +2。<br>點擊物資箱 +10–17。`;
+    case 'power': return `<span class="t">⚡ 電力 耗電 ${G.power.cons} / 供電 ${G.power.prod}</span>
+      ${G.power.ok ? '電力充足。' : '<b>電力不足！</b>'}<br>
+      不足時回收站收益減半、垃圾場停止生產垃圾車。塔不受影響。`;
+    case 'trucks': return `<span class="t">🚛 垃圾車 ${G.trucks.length} / ${MAX_TRUCKS}</span>
+      由垃圾場在準備階段生產，自動撿物資箱。`;
+    case 'phase': return `<span class="t">波次流程</span>準備：建造、撿物資箱。<br>
+      海嘯：右側注水，之後積水慢慢滲退；水清得快，波次就早完結。<br>退水：海水退去，進入下一波。`;
+    case 'wave': return `<span class="t">第 ${Math.min(G.wave+1, WAVES.length)} / ${WAVES.length} 波</span>
+      注水時長 ×${w.energy} · 水流速度 ×${w.speed} · 準備 ${w.prep}s`;
+    case 'super': return `<span class="t">🛰️ ${SUPER.name}</span>清空半徑 ${SUPER.radius} 內的水並短暫凍結。<br>
+      冷卻 ${SUPER.cd}s · 需要科技中心與超級武器基地 · 快捷鍵 R`;
+    case 'pause': return G.paused ? '繼續（P / Space）' : '暫停（P / Space）';
+  }
+  return '';
+}
+
+// 地圖上的提示（只在暫停時顯示）
+function worldTip(gx, gy){
+  if(gx<0 || gx>=COLS || gy<0 || gy>=ROWS) return '';
+  const ent = G.grid[gx][gy];
+  if(ent) return defTip(ent.defId, ent);
+  const box = G.boxes.find(b => b.x === gx && b.y === gy);
+  if(box) return `<span class="t">📦 物資箱</span>點擊 +10–17 材料 · ${Math.ceil(box.life)} 秒後消失`;
+  const h = G.water[idx(gx,gy)];
+  if(inHome(gx,gy)) return `<span class="t">🏠 我的家</span>水深 <b>${h.toFixed(2)}</b>，超過 ${LOSE_DEPTH} 即失敗。`;
+  if(h > 0.02) return `<span class="t">🌊 水深 ${h.toFixed(2)}</span>${G.freeze[idx(gx,gy)] > 0 ? '已凍結，不會流動。' : ''}`;
+  return '';
+}
+
+const tipEl = document.getElementById('tip');
+function showTip(html, x, y){
+  tipEl.innerHTML = html;
+  tipEl.style.display = 'block';
+  const w = tipEl.offsetWidth, h = tipEl.offsetHeight;
+  tipEl.style.left = Math.max(4, Math.min(x + 14, 960 - w - 4)) + 'px';
+  tipEl.style.top = (y + 14 + h > 516 ? y - h - 10 : y + 14) + 'px';
+}
+function hideTip(){ tipEl.style.display = 'none'; }
+
+app.addEventListener('pointermove', e => {
+  const r = app.getBoundingClientRect(), s = r.width / 960;
+  const x = (e.clientX - r.left) / s, y = (e.clientY - r.top) / s;
+  const t = e.target.closest('[data-tip]');
+  const html = t ? tipFor(t.dataset.tip)
+    : (e.target === canvas && G.paused) ? worldTip(mouse.gx, mouse.gy) : '';
+  if(html) showTip(html, x, y); else hideTip();
+});
+app.addEventListener('pointerleave', hideTip);
+
 /* ══════════════ 暫停 ══════════════ */
 function canPause(){
   return G.phase === 'prep' || G.phase === 'tsunami' || G.phase === 'drain';
@@ -857,6 +945,7 @@ function togglePause(force){
   if(!canPause()) return;
   G.paused = force !== undefined ? force : !G.paused;
   document.getElementById('pauseBtn').textContent = G.paused ? '▶' : '⏸';
+  hideTip();
 }
 document.getElementById('pauseBtn').onclick = () => togglePause();
 document.addEventListener('visibilitychange', () => {
@@ -1576,14 +1665,12 @@ function buildUI(){
     const el = document.createElement('div');
     el.className = 'btn';
     el.dataset.id = id;
+    el.dataset.tip = 'b:' + id;
     const extra = [];
     if(d.size === 2) extra.push('2×2');
-    if(d.power) extra.push(`+${d.power}⚡`);
-    if(d.tower) extra.push('⚡3');
-    if(d.producer) extra.push('⚡5');
-    if(d.income) extra.push('⚡5');
-    if(id === 'tech') extra.push('⚡10');
-    if(id === 'superbase') extra.push('⚡15');
+    const pw = powerOf(id);
+    if(pw > 0) extra.push(`+${pw}⚡`);
+    else if(pw < 0) extra.push(`⚡${-pw}`);
     el.innerHTML = `<span class="key">${d.key || ''}</span>
       <span class="nm">${d.name}</span>
       <span class="cost">🪵${d.cost} ${extra.join(' ')}</span>`;
@@ -1601,6 +1688,7 @@ function buildUI(){
   const su = document.createElement('div');
   su.className = 'btn';
   su.dataset.id = 'super';
+  su.dataset.tip = 'super';
   su.style.width = '228px';
   su.innerHTML = `<span class="key">R</span>
     <span class="nm">🛰️ 軌道離子炮</span>
