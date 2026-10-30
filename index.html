@@ -129,21 +129,23 @@ const WATER_MAX = 1.4;
 const FLOW_INTERVAL = 0.075;         // 每 75ms 一步水流
 const HOME = { x: 1, y: 8, w: 3, h: 4 };
 const LOSE_DEPTH = 0.55;             // 家前水深刻度即失敗
-const INFLOW_END = 8;                // waveProgress 超過此值即停止注水
-const TSUNAMI_MAX = 20;              // waveProgress 超過此值強制進入退水
+const INFLOW_END = 8;                // 注水時長（乘以波次 energy）
+const TSUNAMI_MAX = 12;              // 停止注水後最多再等的波次進度
 const SEEP_KEEP = 0.7;               // 停止注水後每秒保留的水量比例
 const DRAIN_KEEP = 0.35;             // 退水階段每秒保留的水量比例
 const FLOW_RATE = 0.55;              // 每步流向下一格的水量比例
 const WATER_EPS = 0.008;             // 低於此水深視為乾涸
+const START_MATS = 80;               // 開局材料
+const BASE_INCOME = 3;               // 準備階段每秒基本收入
 
 const DEFS = {
-  sandbag:   { name:'沙包',      cost:8,   hp:80,   block:true, size:1, color:'#c9a86a', h:6,  key:'1' },
-  tree:      { name:'防護林',    cost:15,  hp:140,  block:true, size:1, color:'#3e8a3e', h:16, key:'2' },
-  wall:      { name:'石牆',      cost:30,  hp:260,  block:true, size:1, color:'#8c8c96', h:12, key:'3' },
-  dike:      { name:'堤壩',      cost:60,  hp:600,  block:true, size:1, color:'#b4b4be', h:18, key:'4' },
-  mg:        { name:'機槍塔',    cost:40,  hp:150,  block:true, size:1, color:'#6a7a6a', h:20, key:'5', tower:'mg' },
-  rocket:    { name:'火箭炮塔',  cost:80,  hp:180,  block:true, size:1, color:'#8a6a5a', h:22, key:'6', tower:'rocket' },
-  frost:     { name:'冷凍光線塔',cost:70,  hp:140,  block:true, size:1, color:'#5a9aca', h:20, key:'7', tower:'frost' },
+  sandbag:   { name:'沙包',      cost:14,  hp:400,  block:true, size:1, color:'#c9a86a', h:6,  key:'1' },
+  tree:      { name:'防護林',    cost:22,  hp:650,  block:true, size:1, color:'#3e8a3e', h:16, key:'2' },
+  wall:      { name:'石牆',      cost:26,  hp:900,  block:true, size:1, color:'#8c8c96', h:12, key:'3' },
+  dike:      { name:'堤壩',      cost:45,  hp:1900, block:true, size:1, color:'#b4b4be', h:18, key:'4' },
+  mg:        { name:'機槍塔',    cost:30,  hp:150,  block:true, size:1, color:'#6a7a6a', h:20, key:'5', tower:'mg',     range:3.6, dmg:1.2, cd:0.14 },
+  rocket:    { name:'火箭炮塔',  cost:60,  hp:180,  block:true, size:1, color:'#8a6a5a', h:22, key:'6', tower:'rocket', range:4.5, dmg:1.4, cd:0.5 },
+  frost:     { name:'冷凍光線塔',cost:55,  hp:140,  block:true, size:1, color:'#5a9aca', h:20, key:'7', tower:'frost',  range:3.2, dmg:0.8 },
   dump:      { name:'垃圾場',    cost:50,  hp:200,  block:true, size:2, color:'#6a7a5a', h:10, key:'8', producer:true },
   power:     { name:'發電廠',    cost:70,  hp:220,  block:true, size:2, color:'#4a7aa8', h:16, key:'9', power:30 },
   recycle:   { name:'回收站',    cost:40,  hp:160,  block:true, size:2, color:'#3f8f6a', h:8,  key:'0', income:2 },
@@ -155,10 +157,10 @@ const SUPER = { cd:45, radius:6, name:'軌道離子炮' };
 
 const WAVES = [
   { energy:1.0, speed:1.0, prep:45 },
-  { energy:1.4, speed:1.1, prep:38 },
-  { energy:1.9, speed:1.2, prep:34 },
-  { energy:2.5, speed:1.3, prep:32 },
-  { energy:3.2, speed:1.4, prep:30 },
+  { energy:1.6, speed:1.1, prep:38 },
+  { energy:2.3, speed:1.2, prep:34 },
+  { energy:3.0, speed:1.3, prep:32 },
+  { energy:3.8, speed:1.4, prep:30 },
 ];
 
 /* ══════════════ 狀態 ══════════════ */
@@ -175,7 +177,7 @@ const G = {
   flowTimer:0,
   incomeAcc:0, boxTimer:0,
   shake:0, time:0,
-  waveProgress:0,
+  waveProgress:0, inflowEnd:0,
   techUnlocked:false, superUnlocked:false,
   superCD:0,
   superAim:false,
@@ -270,7 +272,7 @@ function startGame(){
   init();
   G.phase = 'prep';
   G.wave = 0;
-  G.materials = 80;
+  G.materials = START_MATS;
   G.timer = WAVES[0].prep;
   G.incomeAcc = 0; G.boxTimer = 0;
   G.shake = 0;
@@ -286,6 +288,7 @@ function startWave(){
   G.phase = 'tsunami';
   G.waveProgress = 0;
   G.waveSpeed = w.speed;
+  G.inflowEnd = INFLOW_END * w.energy;
   G.boxes.length = 0;
   G.shake = 8;
   toast(`⚠ 第 ${G.wave+1} 波海嘯來襲！`, true);
@@ -313,7 +316,7 @@ function endGame(win){
 /* ══════════════ 水體模擬 ══════════════ */
 function updateWater(dt){
   // 海嘯階段：從右側注入（限時）
-  if(G.phase === 'tsunami' && G.waveProgress <= INFLOW_END){
+  if(G.phase === 'tsunami' && G.waveProgress <= G.inflowEnd){
     const injectRate = 0.55 * G.waveSpeed;
     for(let y=0;y<ROWS;y++){
       const i = idx(COLS-1, y);
@@ -325,7 +328,7 @@ function updateWater(dt){
   if(G.phase === 'tsunami'){
     G.waveProgress += dt * G.waveSpeed;
     // 滲水：停止注水後積水緩慢消退
-    if(G.waveProgress > INFLOW_END) decayWater(SEEP_KEEP, dt);
+    if(G.waveProgress > G.inflowEnd) decayWater(SEEP_KEEP, dt);
   }
   // 退水
   if(G.phase === 'drain') decayWater(DRAIN_KEEP, dt);
@@ -474,7 +477,7 @@ function updateTowers(dt){
     const def = s.def;
     const cx = s.gx*TX + s.size*TX/2;
     const cy = s.gy*TY + s.size*TY/2;
-    const R = { mg:3.6, rocket:4.5, frost:3.2 }[def.tower] || 3;
+    const R = def.range;
     const Rg = Math.ceil(R);
 
     // 搜尋射程內最厚的水
@@ -493,9 +496,9 @@ function updateTowers(dt){
     if(def.tower === 'mg'){
       s.cd -= dt;
       if(s.cd <= 0){
-        s.cd += 0.14;
+        s.cd += def.cd;
         const ti = idx(best.gx, best.gy);
-        G.water[ti] = Math.max(0, G.water[ti] - 0.09);
+        G.water[ti] = Math.max(0, G.water[ti] - def.dmg);
         // 彈道特效
         G.projectiles.push({
           type:'bullet',
@@ -509,7 +512,7 @@ function updateTowers(dt){
     else if(def.tower === 'rocket'){
       s.cd -= dt;
       if(s.cd <= 0){
-        s.cd += 2.4;
+        s.cd += def.cd;
         G.projectiles.push({
           type:'rocket',
           x1: cx, y1: cy,
@@ -524,7 +527,7 @@ function updateTowers(dt){
       s.beamTo = best;
       const ti = idx(best.gx, best.gy);
       G.freeze[ti] = Math.max(G.freeze[ti], 1.4);
-      G.water[ti] = Math.max(0, G.water[ti] - 0.03*dt*10);
+      G.water[ti] = Math.max(0, G.water[ti] - def.dmg*dt);
     }
   }
 
@@ -542,7 +545,7 @@ function updateTowers(dt){
         const gx = p.gx+dx, gy = p.gy+dy;
         if(gx<0 || gx>=COLS || gy<0 || gy>=ROWS) continue;
         const ti = idx(gx,gy);
-        G.water[ti] = Math.max(0, G.water[ti] - 0.18);
+        G.water[ti] = Math.max(0, G.water[ti] - DEFS.rocket.dmg);
       }
       G.effects.push({ type:'explosion',
         x: p.x2, y: p.y2, t:0, dur:0.4, r: R*TX });
@@ -648,7 +651,7 @@ function update(dt){
     G.incomeAcc += dt;
     while(G.incomeAcc >= 1){
       G.incomeAcc -= 1;
-      let inc = 3;
+      let inc = BASE_INCOME;
       for(const s of G.structures){
         if(s.def.income) inc += s.def.income * (G.power.ok ? 1 : 0.5);
       }
@@ -681,7 +684,7 @@ function update(dt){
 
     // 判斷波次結束：水源結束且水退去，或超時
     const totalWater = G.water.reduce((a,b)=>a+b, 0);
-    if(G.waveProgress > INFLOW_END && (totalWater < 3 || G.waveProgress > TSUNAMI_MAX)){
+    if(G.waveProgress > G.inflowEnd && (totalWater < 3 || G.waveProgress > G.inflowEnd + TSUNAMI_MAX)){
       G.phase = 'drain';
       G.drainT = 0;
     }
@@ -915,6 +918,7 @@ function render(){
   botGrad.addColorStop(1,'rgba(0,0,0,0.5)');
   ctx.fillStyle = botGrad;
   ctx.fillRect(0,H+WORLD_Y-10,960,20);
+
 }
 
 /* --- 水體渲染 --- */
