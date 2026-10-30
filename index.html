@@ -117,6 +117,8 @@
   <div id="overlay"></div>
 </div>
 
+<script src="lang/zh-Hant.js"></script>
+<script src="lang/en.js"></script>
 <script>
 (() => {
 "use strict";
@@ -157,6 +159,7 @@ const DEFS = {
 };
 
 const SUPER = { cd:45, radius:6 };
+const MAX_TRUCKS = 5;
 
 const WAVES = [
   { energy:1.0, speed:1.0, prep:45 },
@@ -271,134 +274,10 @@ function init(){
 }
 
 /* ══════════════ 語言 ══════════════ */
-const STR = {
-  'zh-Hant': {
-    title: '海嘯：最後防線 · 半3D版',
-    names: { sandbag:'沙包', tree:'防護林', wall:'石牆', dike:'堤壩', mg:'機槍塔', rocket:'火箭炮塔',
-      frost:'冷凍光線塔', dump:'垃圾場', power:'發電廠', recycle:'回收站', tech:'科技中心',
-      superbase:'超級武器基地', super:'軌道離子炮' },
-    role: {
-      sandbag:  '便宜的擋水牆，適合快速封住缺口。',
-      tree:     '中等擋水，比沙包耐打。',
-      wall:     '高血量擋水牆。',
-      dike:     '血量最高，適合補在最多水衝擊的位置。',
-      mg:       '高射速，每發清走射程內最深一格的水。',
-      rocket:   '範圍爆炸，清走目標周圍多格的水。',
-      frost:    '持續光束：清水並凍結水格，凍結的水不會流動。',
-      dump:     '準備階段每 14 秒生產一輛垃圾車，自動撿物資箱（最多 5 輛）。需電力充足。',
-      power:    '提供電力。',
-      recycle:  '準備階段每秒 +2 材料（電力不足時減半）。',
-      tech:     '解鎖超級武器基地。',
-      superbase:'解鎖軌道離子炮。',
-    },
-    menuH1: '海 嘯', menuH2: '最 後 防 線 · 半 3 D 版',
-    menuP: () => `巨浪將至。<span class="hi">準備階段</span>收集物資、建造設施與防線。<br>
-      水會沿地面流動，<span class="hi">遇到障礙物會向斜前方漫流</span>——小心被繞過防線！<br>
-      <span class="hi">牆</span>擋水，<span class="hi">機槍塔 / 火箭炮塔 / 冷凍光線塔</span>清水。<br>
-      <span class="hi">科技中心</span>解鎖<span class="hi">超級武器基地</span>，建成後可發射軌道離子炮（CD ${SUPER.cd} 秒）。<br>
-      撐過 ${WAVES.length} 波海嘯即勝利。`,
-    start: '開 始 遊 戲', again: '再 玩 一 次', retry: '重 新 挑 戰',
-    pickLang: '選擇語言 · Choose language', changeLang: 'Language / 語言',
-    winH1: '守 住 了', winH2: '村 莊 平 安',
-    winP: m => `${WAVES.length} 波海嘯全部擋下，你的家完好無損。<br>剩餘材料：<span class="hi">${m}</span>`,
-    loseH1: '家 園 已 毀', loseH2: '海 嘯 吞 沒 了 一 切',
-    loseP: w => `在第 <span class="warn">${w}</span> 波倒下。<br>試著用塔的射程覆蓋缺口，並注意水會繞過障礙物。`,
-    wave: (n, total) => `第 ${n} / ${total} 波`,
-    phasePrep: '準備階段', phaseTsunami: '⚠ 海嘯來襲', phaseDrain: '海水退去…',
-    tWaveIncoming: n => `⚠ 第 ${n} 波海嘯來襲！`,
-    tNextWave: (n, s) => `第 ${n} 波即將來臨 — 準備時間 ${s} 秒`,
-    tNoMats: '材料不足', tCantBuild: '這裡無法建造', tMats: n => `+${n} 材料`,
-    tSuperLocked: '尚未解鎖超級武器', tCooldown: s => `冷卻中 ${s}s`,
-    tNeedTech: '需要先建造科技中心', tNeedSuper: '需要先建造科技中心與超級武器基地',
-    tSuperFire: '⚡ 軌道離子炮發射！',
-    paused: '暫 停', pausedHint: '按 P / Space 或 ▶ 繼續',
-    home: '🏠 我的家',
-    superBtn: () => `半徑 ${SUPER.radius} · CD ${SUPER.cd}s`,
-    cost: '成本', hp: '血量', size2: '佔地 2×2', supply: '供電', use: '耗電',
-    frostStats: d => `射程 ${d.range} · 每秒清水 ${d.dmg}`,
-    towerStats: d => `射程 ${d.range} · 每發清水 ${d.dmg} · 冷卻 ${d.cd}s`,
-    hotkey: k => `快捷鍵 ${k}`,
-    tipMats: m => `<span class="t">🪵 材料 ${m}</span>用來建造。<br>
-      準備階段每秒 +<b>${BASE_INCOME}</b>，每座回收站再 +2。<br>點擊物資箱 +10–17。`,
-    tipPower: p => `<span class="t">⚡ 電力 耗電 ${p.cons} / 供電 ${p.prod}</span>
-      ${p.ok ? '電力充足。' : '<b>電力不足！</b>'}<br>
-      不足時回收站收益減半、垃圾場停止生產垃圾車。塔不受影響。`,
-    tipTrucks: n => `<span class="t">🚛 垃圾車 ${n} / ${MAX_TRUCKS}</span>由垃圾場在準備階段生產，自動撿物資箱。`,
-    tipPhase: `<span class="t">波次流程</span>準備：建造、撿物資箱。<br>
-      海嘯：右側注水，之後積水慢慢滲退；水清得快，波次就早完結。<br>退水：海水退去，進入下一波。`,
-    tipWave: (n, w) => `<span class="t">第 ${n} / ${WAVES.length} 波</span>
-      注水時長 ×${w.energy} · 水流速度 ×${w.speed} · 準備 ${w.prep}s`,
-    tipSuper: () => `<span class="t">🛰️ 軌道離子炮</span>清空半徑 ${SUPER.radius} 內的水並短暫凍結。<br>
-      冷卻 ${SUPER.cd}s · 需要科技中心與超級武器基地 · 快捷鍵 R`,
-    tipPause: p => p ? '繼續（P / Space）' : '暫停（P / Space）',
-    tipBox: s => `<span class="t">📦 物資箱</span>點擊 +10–17 材料 · ${s} 秒後消失`,
-    tipHome: h => `<span class="t">🏠 我的家</span>水深 <b>${h}</b>，超過 ${LOSE_DEPTH} 即失敗。`,
-    tipWater: (h, frozen) => `<span class="t">🌊 水深 ${h}</span>${frozen ? '已凍結，不會流動。' : ''}`,
-  },
-  en: {
-    title: 'Tsunami: Last Line of Defense',
-    names: { sandbag:'Sandbag', tree:'Tree Belt', wall:'Stone Wall', dike:'Dike', mg:'Machine Gun',
-      rocket:'Rocket', frost:'Freeze Ray', dump:'Dump', power:'Power Plant', recycle:'Recycler',
-      tech:'Tech Center', superbase:'Super Base', super:'Orbital Ion Cannon' },
-    role: {
-      sandbag:  'Cheap water barrier. Good for plugging gaps fast.',
-      tree:     'Medium barrier, tougher than a sandbag.',
-      wall:     'High-HP water barrier.',
-      dike:     'Highest HP. Place it where the water hits hardest.',
-      mg:       'Fast fire. Each shot clears the deepest water tile in range.',
-      rocket:   'Area blast. Clears water on several tiles around the target.',
-      frost:    'Constant beam: clears water and freezes the tile. Frozen water does not flow.',
-      dump:     'Makes a garbage truck every 14 s during prep (max 5). Trucks pick up boxes. Needs enough power.',
-      power:    'Supplies power.',
-      recycle:  '+2 materials per second during prep (halved when power is short).',
-      tech:     'Unlocks the Super Base.',
-      superbase:'Unlocks the Orbital Ion Cannon.',
-    },
-    menuH1: 'TSUNAMI', menuH2: 'LAST LINE OF DEFENSE',
-    menuP: () => `A giant wave is coming. In the <span class="hi">prep phase</span>, collect supplies and build defences.<br>
-      Water flows over the ground and <span class="hi">spills diagonally around obstacles</span>. Watch for gaps!<br>
-      <span class="hi">Walls</span> hold water back; <span class="hi">Machine Guns, Rockets and Freeze Rays</span> clear it.<br>
-      The <span class="hi">Tech Center</span> unlocks the <span class="hi">Super Base</span>, which fires the Orbital Ion Cannon (${SUPER.cd} s cooldown).<br>
-      Survive ${WAVES.length} waves to win.`,
-    start: 'START GAME', again: 'PLAY AGAIN', retry: 'TRY AGAIN',
-    pickLang: '選擇語言 · Choose language', changeLang: 'Language / 語言',
-    winH1: 'YOU HELD', winH2: 'THE VILLAGE IS SAFE',
-    winP: m => `All ${WAVES.length} waves stopped. Your home is untouched.<br>Materials left: <span class="hi">${m}</span>`,
-    loseH1: 'HOME LOST', loseH2: 'THE TSUNAMI TOOK IT ALL',
-    loseP: w => `Fell on wave <span class="warn">${w}</span>.<br>Cover gaps with tower range, and watch for water flowing around obstacles.`,
-    wave: (n, total) => `Wave ${n} / ${total}`,
-    phasePrep: 'Prep', phaseTsunami: '⚠ Tsunami!', phaseDrain: 'Water receding…',
-    tWaveIncoming: n => `⚠ Wave ${n} incoming!`,
-    tNextWave: (n, s) => `Wave ${n} is coming — ${s} s to prepare`,
-    tNoMats: 'Not enough materials', tCantBuild: "Can't build here", tMats: n => `+${n} materials`,
-    tSuperLocked: 'Super weapon not unlocked', tCooldown: s => `Cooling down ${s}s`,
-    tNeedTech: 'Build a Tech Center first', tNeedSuper: 'Build a Tech Center and a Super Base first',
-    tSuperFire: '⚡ Ion cannon fired!',
-    paused: 'PAUSED', pausedHint: 'Press P / Space or ▶ to resume',
-    home: '🏠 Home',
-    superBtn: () => `Radius ${SUPER.radius} · CD ${SUPER.cd}s`,
-    cost: 'Cost', hp: 'HP', size2: 'Size 2×2', supply: 'Power', use: 'Uses',
-    frostStats: d => `Range ${d.range} · Clears ${d.dmg}/s`,
-    towerStats: d => `Range ${d.range} · Clears ${d.dmg}/shot · Cooldown ${d.cd}s`,
-    hotkey: k => `Hotkey ${k}`,
-    tipMats: m => `<span class="t">🪵 Materials ${m}</span>Used for building.<br>
-      +<b>${BASE_INCOME}</b>/s during prep, +2 more per Recycler.<br>Click a supply box for +10–17.`,
-    tipPower: p => `<span class="t">⚡ Power used ${p.cons} / supply ${p.prod}</span>
-      ${p.ok ? 'Power is enough.' : '<b>Not enough power!</b>'}<br>
-      When short, Recyclers earn half and Dumps stop making trucks. Towers are not affected.`,
-    tipTrucks: n => `<span class="t">🚛 Trucks ${n} / ${MAX_TRUCKS}</span>Made by Dumps during prep. They pick up supply boxes.`,
-    tipPhase: `<span class="t">How a wave works</span>Prep: build and collect boxes.<br>
-      Tsunami: water pours in from the right, then slowly seeps away. Clear it fast to end the wave early.<br>Receding: the water drains, then the next wave starts.`,
-    tipWave: (n, w) => `<span class="t">Wave ${n} / ${WAVES.length}</span>
-      Inflow ×${w.energy} · Flow speed ×${w.speed} · Prep ${w.prep}s`,
-    tipSuper: () => `<span class="t">🛰️ Orbital Ion Cannon</span>Clears all water within radius ${SUPER.radius} and briefly freezes it.<br>
-      Cooldown ${SUPER.cd}s · Needs a Tech Center and a Super Base · Hotkey R`,
-    tipPause: p => p ? 'Resume (P / Space)' : 'Pause (P / Space)',
-    tipBox: s => `<span class="t">📦 Supply box</span>Click for +10–17 materials · disappears in ${s} s`,
-    tipHome: h => `<span class="t">🏠 Home</span>Water depth <b>${h}</b>. Above ${LOSE_DEPTH} you lose.`,
-    tipWater: (h, frozen) => `<span class="t">🌊 Water depth ${h}</span>${frozen ? 'Frozen: it does not flow.' : ''}`,
-  },
-};
+// 語言檔在 lang/*.js，載入時註冊到 window.TSUNAMI_LANGS
+const STR = {};
+for(const [k, make] of Object.entries(window.TSUNAMI_LANGS))
+  STR[k] = make({ SUPER, WAVES, BASE_INCOME, MAX_TRUCKS, LOSE_DEPTH });
 
 const LANG_KEY = 'tsunami.lang';
 function savedLang(){
@@ -435,8 +314,8 @@ function showMenu(){
 function showLangPicker(){
   const ov = document.getElementById('overlay');
   ov.innerHTML = `<h2>${L().pickLang}</h2>
-    <div class="langs"><button class="langBtn" data-lang="zh-Hant">繁體中文</button>
-    <button class="langBtn" data-lang="en">English</button></div>`;
+    <div class="langs">${Object.entries(STR).map(([k, s]) =>
+      `<button class="langBtn" data-lang="${k}">${s.langName}</button>`).join('')}</div>`;
   ov.querySelectorAll('.langBtn').forEach(b => {
     b.onclick = () => { setLang(b.dataset.lang); showMenu(); };
   });
@@ -730,7 +609,6 @@ function updateTowers(dt){
 }
 
 /* ══════════════ 垃圾車 ══════════════ */
-const MAX_TRUCKS = 5;
 function updateTrucks(dt){
   if(G.phase === 'prep'){
     // 垃圾場生產

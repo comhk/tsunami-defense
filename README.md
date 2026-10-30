@@ -2,7 +2,7 @@
 
 [![Deploy to GitHub Pages](https://github.com/comhk/tsunami-defense/actions/workflows/pages.yml/badge.svg)](https://github.com/comhk/tsunami-defense/actions/workflows/pages.yml)
 
-單一 HTML 檔（零依賴、零建置）的 Canvas 塔防遊戲。你要在巨浪來臨前收集物資、建造防線，
+純 HTML + JS（零依賴、零建置）的 Canvas 塔防遊戲。你要在巨浪來臨前收集物資、建造防線，
 用沙包 / 防護林 / 石牆 / 堤壩擋水，用機槍塔 / 火箭炮塔 / 冷凍光線塔主動削弱海嘯，
 撐過 5 波即勝利。
 
@@ -33,10 +33,10 @@
 ## 語言 / Language
 
 支援繁體中文與 English。第一次按「開始遊戲」時會詢問語言，之後記住選擇（瀏覽器 `localStorage`）；
-開始畫面的「Language / 語言」可隨時切換。所有文字都在 `index.html` 的 `STR` 表內。
+開始畫面的「Language / 語言」可隨時切換。所有文字都在 `lang/` 內（`zh-Hant.js`、`en.js`）；新增語言時加一個檔案，並在 `index.html` 加一行 `<script>`。
 
 Traditional Chinese and English are supported. The game asks on the first Start and remembers the choice;
-use "Language / 語言" on the start screen to switch.
+use "Language / 語言" on the start screen to switch. All strings live in `lang/` (`zh-Hant.js`, `en.js`).
 | `Esc` | 取消 |
 
 ## 執行
@@ -52,13 +52,14 @@ python -m http.server 8000
 
 ## 發佈
 
-每次 push 到 `main`，GitHub Actions（`.github/workflows/pages.yml`）會自動把 `index.html` 發佈到 GitHub Pages。
+每次 push 到 `main`，GitHub Actions（`.github/workflows/pages.yml`）會自動把 `index.html` 與 `lang/` 發佈到 GitHub Pages。
 只發佈遊戲本身，`docs/`、`.scratch/` 不會公開。
 
 ## 結構
 
 ```
 index.html   # 全部遊戲邏輯、渲染、UI（Canvas 2D，半 3D 等角擠出繪製）
+lang/        # 語言檔（繁體中文、English）
 docs/        # 遊戲研究筆記、agent 設定
 .scratch/    # 本地 issue（markdown）
 .github/     # GitHub Pages 自動發佈 workflow
