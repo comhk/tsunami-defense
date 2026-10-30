@@ -47,6 +47,7 @@
   .btn.sel{border-color:#4fd8ff;background:rgba(28,84,124,.95);
     box-shadow:0 0 10px rgba(80,216,255,.55)}
   .btn.locked{opacity:.32;cursor:not-allowed;transform:none!important}
+  #app.paused .btn{cursor:not-allowed}
   .btn .nm{font-weight:700;font-size:10px;color:#eaf6ff;display:block;
     white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .btn .cost{color:#ffd166;font-size:9px;display:block}
@@ -962,6 +963,7 @@ function togglePause(force){
   if(!canPause()) return;
   G.paused = force !== undefined ? force : !G.paused;
   document.getElementById('pauseBtn').textContent = G.paused ? '▶' : '⏸';
+  app.classList.toggle('paused', G.paused);
   hideTip();
 }
 document.getElementById('pauseBtn').onclick = () => togglePause();
@@ -1692,6 +1694,7 @@ function buildUI(){
       <span class="nm">${bname(id)}</span>
       <span class="cost">🪵${d.cost} ${extra.join(' ')}</span>`;
     el.onclick = () => {
+      if(G.paused) return;
       if(id === 'superbase' && !G.techUnlocked){ toast(L().tNeedTech, true); return; }
       G.selectedBuild = G.selectedBuild === id ? null : id;
       G.superAim = false;
@@ -1712,6 +1715,7 @@ function buildUI(){
     <span class="cost">${L().superBtn()}</span>
     <div class="cdmask" style="display:none"></div>`;
   su.onclick = () => {
+    if(G.paused) return;
     if(!G.superUnlocked){ toast(L().tNeedSuper, true); return; }
     if(G.superCD > 0){ toast(L().tCooldown(Math.ceil(G.superCD)), true); return; }
     G.superAim = !G.superAim;
