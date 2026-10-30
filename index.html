@@ -129,6 +129,8 @@ const WATER_MAX = 1.4;
 const FLOW_INTERVAL = 0.075;         // 每 75ms 一步水流
 const HOME = { x: 1, y: 8, w: 3, h: 4 };
 const LOSE_DEPTH = 0.55;             // 家前水深刻度即失敗
+const INFLOW_END = 8;                // waveProgress 超過此值即停止注水
+const TSUNAMI_MAX = 20;              // waveProgress 超過此值強制進入退水
 
 const DEFS = {
   sandbag:   { name:'沙包',      cost:8,   hp:80,   block:true, size:1, color:'#c9a86a', h:6,  key:'1' },
@@ -306,8 +308,8 @@ function endGame(win){
 
 /* ══════════════ 水體模擬 ══════════════ */
 function updateWater(dt){
-  // 海嘯階段：從右側注入
-  if(G.phase === 'tsunami'){
+  // 海嘯階段：從右側注入（限時）
+  if(G.phase === 'tsunami' && G.waveProgress <= INFLOW_END){
     const injectRate = 0.55 * G.waveSpeed;
     for(let y=0;y<ROWS;y++){
       const i = idx(COLS-1, y);
@@ -315,8 +317,8 @@ function updateWater(dt){
         G.water[i] = Math.min(WATER_MAX, G.water[i] + injectRate);
       }
     }
-    G.waveProgress += dt * G.waveSpeed;
   }
+  if(G.phase === 'tsunami') G.waveProgress += dt * G.waveSpeed;
   // 退水
   if(G.phase === 'drain'){
     for(let i=0;i<G.water.length;i++){
@@ -657,9 +659,9 @@ function update(dt){
       return;
     }
 
-    // 判斷波次結束：水源結束且水退去
+    // 判斷波次結束：水源結束且水退去，或超時
     const totalWater = G.water.reduce((a,b)=>a+b, 0);
-    if(G.waveProgress > 8 && totalWater < 3){
+    if(G.waveProgress > INFLOW_END && (totalWater < 3 || G.waveProgress > TSUNAMI_MAX)){
       G.phase = 'drain';
       G.drainT = 0;
     }
