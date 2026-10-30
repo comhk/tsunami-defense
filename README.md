@@ -1,5 +1,7 @@
 # 海嘯：最後防線 · 半 3D 版
 
+[![Deploy to GitHub Pages](https://github.com/comhk/tsunami-defense/actions/workflows/pages.yml/badge.svg)](https://github.com/comhk/tsunami-defense/actions/workflows/pages.yml)
+
 單一 HTML 檔（零依賴、零建置）的 Canvas 塔防遊戲。你要在巨浪來臨前收集物資、建造防線，
 用沙包 / 防護林 / 石牆 / 堤壩擋水，用機槍塔 / 火箭炮塔 / 冷凍光線塔主動削弱海嘯，
 撐過 5 波即勝利。
