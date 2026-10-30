@@ -57,7 +57,7 @@
   tipPhase: `<span class="t">波次流程</span>準備：建造、撿物資箱。<br>
     海嘯：右側注水，之後積水慢慢滲退；水清得快，波次就早完結。<br>退水：海水退去，進入下一波。`,
   tipWave: (n, w) => `<span class="t">第 ${n} / ${WAVES.length} 波</span>
-    注水時長 ×${w.energy} · 水流速度 ×${w.speed} · 準備 ${w.prep}s`,
+    ${w.pulses.length} 道湧浪 · 總注水 ${w.pulses.reduce((a,s)=>a+s.dur,0)} · 水流速度 ×${w.speed} · 準備 ${w.prep}s`,
   tipSuper: () => `<span class="t">🛰️ 軌道離子炮</span>清空半徑 ${SUPER.radius} 內的水並短暫凍結。<br>
     冷卻 ${SUPER.cd}s · 需要科技中心與超級武器基地 · 快捷鍵 R`,
   tipPause: p => p ? '繼續（P / Space）' : '暫停（P / Space）',

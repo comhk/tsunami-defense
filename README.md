@@ -70,13 +70,13 @@ docs/        # 遊戲研究筆記、agent 設定
 - `COLS / ROWS`：地圖 32 × 16 格
 - `DEFS`：所有建築的名稱、成本、HP、高度、快捷鍵
 - `DEFS` 塔的 `range` / `dmg` / `cd`：射程、每發清水量（冷凍光線為每秒）、冷卻秒數
-- `WAVES`：5 波的 `energy`（注水時長倍數）/ 速度 / 準備秒數
+- `WAVES`：5 波的速度 / 準備秒數 / `pulses` 湧浪列表；每道湧浪 `{ at, dur, power }` 為開始進度、注水長度、強度（注水速率倍數；>1 時右邊緣注水上限由 92% 提高，最多至滿水深）。進度 = 遊戲時間 × 速度。最後一道湧浪結束前波次唔會完結
 - `START_MATS` / `BASE_INCOME`：開局材料、準備階段每秒收入
 - `SUPER`：超級武器 CD 與半徑
 - `FLOW_INTERVAL`：水流模擬步長（數值越細越平滑但越貴）
 - `FLOW_RATE`：每步流向下一格的水量比例
-- `INFLOW_END` / `TSUNAMI_MAX`：注水時長（× `energy`）/ 停止注水後最多再等的進度
-- `SEEP_KEEP` / `DRAIN_KEEP`：停止注水後 / 退水階段每秒保留的水量比例
+- `TSUNAMI_MAX`：最後一道湧浪結束後最多再等的進度
+- `SEEP_KEEP` / `DRAIN_KEEP`：湧浪之間及之後 / 退水階段每秒保留的水量比例
 - `LOSE_DEPTH`：家前失敗水深
 
 MIT License

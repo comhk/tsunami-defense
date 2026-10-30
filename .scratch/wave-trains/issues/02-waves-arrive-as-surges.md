@@ -6,10 +6,10 @@
 
 **Status:** ready-for-agent
 
-- [ ] Tests: inflow switches on and off at each surge's `at`/`dur`, and each wave has the expected surge count (wave 1 has exactly 1)
-- [ ] Tests: a wave stays in `tsunami` until its last surge ends, even when all water is removed during a gap
-- [ ] Tests: after the last surge, the existing early-end and time-limit rules still move the wave to `drain`
-- [ ] Tests: materials don't increase during gaps
-- [ ] Tests: with no structures, total inflow per wave is within ±15% of the ticket-01 baseline; peak home depth is printed for information
-- [ ] The wave tooltip strings in `lang/zh-Hant.js` and `lang/en.js` no longer reference `energy`
-- [ ] README parameter reference describes the surge list in place of `energy`
+- [x] Tests: inflow switches on and off at each surge's `at`/`dur`, and each wave has the expected surge count (wave 1 has exactly 1)
+- [x] Tests: a wave stays in `tsunami` until its last surge ends, even when all water is removed during a gap
+- [x] Tests: after the last surge, the existing early-end and time-limit rules still move the wave to `drain`
+- [x] Tests: materials don't increase during gaps
+- [x] Tests: with no structures, total inflow per wave is within ±15% of the ticket-01 baseline; peak home depth is printed for information
+- [x] The wave tooltip strings in `lang/zh-Hant.js` and `lang/en.js` no longer reference `energy`
+- [x] README parameter reference describes the surge list in place of `energy`
