@@ -141,6 +141,10 @@ const SEEP_KEEP = 0.7;               // 湧浪之間及之後每秒保留的水�
 const DRAIN_KEEP = 0.35;             // 退水階段每秒保留的水量比例
 const FLOW_RATE = 0.55;              // 每步流向下一格的水量比例
 const WATER_EPS = 0.008;             // 低於此水深視為乾涸
+const BUOY_COST = 30;                // 預警浮標成本
+const BEACH_X = 27;                  // 海灘起點（浮標只能建在 x >= 此值）
+const LEVEL_LOW = 0.9;               // 倍率低於此值為「低」
+const LEVEL_HIGH = 1.15;             // 倍率高於此值為「高」；之間為「中」
 const START_MATS = 80;               // 開局材料
 const BASE_INCOME = 3;               // 準備階段每秒基本收入
 
@@ -157,6 +161,8 @@ const DEFS = {
   recycle:   { cost:40,  hp:160,  block:true, size:2, color:'#3f8f6a', h:8,  key:'0', income:2 },
   tech:      { cost:150, hp:400,  block:true, size:2, color:'#7a5a9a', h:26, key:'T' },
   superbase: { cost:300,hp:500, block:true, size:2, color:'#a05050', h:30, key:'Y' },
+  // 預警浮標：不擋水（不進 G.grid）、水不會傷害它；只能建在海灘，全局最多一個
+  buoy:      { cost:BUOY_COST, hp:100, block:false, size:1, color:'#ffb347', h:14, key:'B', beachOnly:true, unique:true },
 };
 
 const SUPER = { cd:45, radius:6 };
@@ -229,6 +235,7 @@ const G = {
   warnedIdx:0,     // 已出警告的最後一道湧浪
   seed:0,          // 本局種子（開局時決定）
   bays:[],         // 每波的每列倍率（由 seed 得出）
+  buoy:null,       // 預警浮標實體（不在 G.grid 內，所以不擋水）
   techUnlocked:false, superUnlocked:false,
   superCD:0,
   superAim:false,
@@ -303,7 +310,7 @@ function init(){
     G.grid[x] = [];
     for(let y=0;y<ROWS;y++) G.grid[x][y] = null;
   }
-  G.structures = []; G.trucks = []; G.city = [];
+  G.structures = []; G.trucks = []; G.city = []; G.buoy = null;
   G.particles = []; G.projectiles = []; G.effects = []; G.boxes = [];
   G.water.fill(0); G.freeze.fill(0);
   G.waveProgress = 0;
@@ -548,6 +555,9 @@ function inHome(x,y){
 }
 
 function canPlace(def, gx, gy){
+  if(def.unique && G.structures.some(s => s.def === def)) return false;
+  if(def.beachOnly && gx < BEACH_X) return false;
+  if(G.buoy && G.buoy.gx === gx && G.buoy.gy === gy) return false;
   for(let dx=0;dx<def.size;dx++) for(let dy=0;dy<def.size;dy++){
     const x = gx+dx, y = gy+dy;
     if(x<0 || x>=COLS || y<0 || y>=ROWS) return false;
@@ -570,9 +580,10 @@ function placeEntity(defId, gx, gy){
     cells:[], cd:Math.random()*0.5, prodTimer:8, pulse:0,
   };
   for(let dx=0;dx<def.size;dx++) for(let dy=0;dy<def.size;dy++){
-    G.grid[gx+dx][gy+dy] = ent;
+    if(def.block) G.grid[gx+dx][gy+dy] = ent;  // 不擋水的建築不進格網，水流不受影響
     ent.cells.push([gx+dx, gy+dy]);
   }
+  if(defId === 'buoy') G.buoy = ent;
   G.structures.push(ent);
   spawnParticles(gx*TX + def.size*TX/2, gy*TY + def.size*TY/2, 6, def.color, 70);
 
@@ -998,10 +1009,33 @@ function tipFor(key){
   return '';
 }
 
+// 預警：有浮標時，準備階段顯示下一波，海嘯與退水顯示當前波（G.wave 兩者皆指向該波）
+const levelOf = m => m < LEVEL_LOW ? 'low' : m > LEVEL_HIGH ? 'high' : 'medium';
+function forecast(){
+  if(!G.buoy || G.wave >= WAVES.length) return null;
+  const w = G.wave, prof = G.bays[w];
+  return { wave: w, rows: prof.map(m => ({
+    mult: m, level: levelOf(m), surges: WAVES[w].pulses.map(p => p.power * m) })) };
+}
+function markerTip(y){
+  const f = forecast();
+  if(!f || y < 0 || y >= ROWS) return '';
+  const r = f.rows[y];
+  return L().tipMarker(r.level, r.mult, r.surges);
+}
+// 滑鼠停在 (gx, gy) 的提示：標記隨時可看；其他地圖提示只在暫停時
+function hoverTip(gx, gy){
+  if(G.buoy && gx === COLS-1 && !(G.paused && G.grid[gx][gy])){
+    const t = markerTip(gy);
+    if(t) return t;
+  }
+  return G.paused ? worldTip(gx, gy) : '';
+}
+
 // 地圖上的提示（只在暫停時顯示）
 function worldTip(gx, gy){
   if(gx<0 || gx>=COLS || gy<0 || gy>=ROWS) return '';
-  const ent = G.grid[gx][gy];
+  const ent = G.grid[gx][gy] || (G.buoy && G.buoy.gx === gx && G.buoy.gy === gy ? G.buoy : null);
   if(ent) return defTip(ent.defId, ent);
   const box = G.boxes.find(b => b.x === gx && b.y === gy);
   if(box) return L().tipBox(Math.ceil(box.life));
@@ -1026,7 +1060,7 @@ app.addEventListener('pointermove', e => {
   const x = (e.clientX - r.left) / s, y = (e.clientY - r.top) / s;
   const t = e.target.closest('[data-tip]');
   const html = t ? tipFor(t.dataset.tip)
-    : (e.target === canvas && G.paused) ? worldTip(mouse.gx, mouse.gy) : '';
+    : e.target === canvas ? hoverTip(mouse.gx, mouse.gy) : '';
   if(html) showTip(html, x, y); else hideTip();
 });
 app.addEventListener('pointerleave', hideTip);
@@ -1108,6 +1142,7 @@ function render(){
   drawCity();
   drawHome();
   drawAllEntities();
+  drawMarkers();
   drawTrucks();
   drawBoxes();
   drawProjectiles();
@@ -1284,6 +1319,25 @@ function drawAllEntities(){
   for(const e of sorted){
     drawEntity3D(e);
   }
+}
+
+// 預警標記：海邊最右一欄，每列一支向左箭頭，顏色依強度
+const LEVEL_COLOR = { low:'#6fd08c', medium:'#ffd166', high:'#ff5a5a' };
+function drawMarkers(){
+  const f = forecast();
+  if(!f) return;
+  ctx.globalAlpha = 0.9;
+  f.rows.forEach((r, y) => {
+    const cx = (COLS-1)*TX + TX/2, cy = y*TY + TY/2;
+    ctx.fillStyle = LEVEL_COLOR[r.level];
+    ctx.beginPath();
+    ctx.moveTo(cx - 9, cy);
+    ctx.lineTo(cx + 3, cy - 6);
+    ctx.lineTo(cx + 3, cy + 6);
+    ctx.closePath();
+    ctx.fill();
+  });
+  ctx.globalAlpha = 1;
 }
 
 function drawEntity3D(e){
@@ -1895,7 +1949,8 @@ requestAnimationFrame(t => { lastT = t; loop(t); });
 
 // 只在測試旗標下公開唯讀測試介面
 if(TEST) window.__tsunami = Object.freeze({ G, update, startGame, WAVES, HOME, COLS, ROWS, LOSE_DEPTH, pulseIndexAt, nextPulseIndex,
-  BAY_PEAK, BAY_FLOOR,
+  BAY_PEAK, BAY_FLOOR, BUOY_COST, LEVEL_LOW, LEVEL_HIGH,
+  forecast, markerTip, hoverTip,
   setSeed: s => { nextSeed = s; },          // 在 startGame 前呼叫
   rowProfile: w => G.bays[w].slice(),       // 第 w 波（0 起）的每列倍率副本
   place: (defId, gx, gy) => placeEntity(defId, gx, gy) });  // 照一般規則建造

@@ -4,12 +4,12 @@
 
 **Blocked by:** 01, 04
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Tests: the buoy can only be placed on the beach and only once, doesn't block inflow on its row, and survives a full wave
-- [ ] Tests: the forecast levels for each row match the thresholds; a buoy built during wave 1 shows every row as medium ×1.0
-- [ ] Tests: without a buoy, HUD and toast output across a full run is unchanged
-- [ ] Tests: both language files define the same set of keys
-- [ ] Buoy cost and level thresholds are single constants
+- [x] Tests: the buoy can only be placed on the beach and only once, doesn't block inflow on its row, and survives a full wave
+- [x] Tests: the forecast levels for each row match the thresholds; a buoy built during wave 1 shows every row as medium ×1.0
+- [x] Tests: without a buoy, HUD and toast output across a full run is unchanged
+- [x] Tests: both language files define the same set of keys
+- [x] Buoy cost and level thresholds are single constants
 - [ ] Markers, colours and running hover tooltips checked by playing
-- [ ] README describes the buoy and the markers
+- [x] README describes the buoy and the markers

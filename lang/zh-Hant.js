@@ -6,7 +6,7 @@
   title: '海嘯：最後防線 · 半3D版',
   names: { sandbag:'沙包', tree:'防護林', wall:'石牆', dike:'堤壩', mg:'機槍塔', rocket:'火箭炮塔',
     frost:'冷凍光線塔', dump:'垃圾場', power:'發電廠', recycle:'回收站', tech:'科技中心',
-    superbase:'超級武器基地', super:'軌道離子炮' },
+    superbase:'超級武器基地', super:'軌道離子炮', buoy:'預警浮標' },
   role: {
     sandbag:  '便宜的擋水牆，適合快速封住缺口。',
     tree:     '中等擋水，比沙包耐打。',
@@ -20,6 +20,7 @@
     recycle:  '準備階段每秒 +2 材料（電力不足時減半）。',
     tech:     '解鎖超級武器基地。',
     superbase:'解鎖軌道離子炮。',
+    buoy:     '只能建在海灘，全局限一個。水會穿過它、也不會損壞它；在海邊顯示每列的預計強度。',
   },
   menuH1: '海 嘯', menuH2: '最 後 防 線 · 半 3 D 版',
   menuP: () => `巨浪將至。<span class="hi">準備階段</span>收集物資、建造設施與防線。<br>
@@ -64,6 +65,9 @@
     ${w.pulses.length} 道湧浪${w.pulses.length === 1 ? '' : ` · 最大：第 ${big} 道`} · 水流速度 ×${w.speed} · 準備 ${w.prep}s`,
   tipSuper: () => `<span class="t">🛰️ 軌道離子炮</span>清空半徑 ${SUPER.radius} 內的水並短暫凍結。<br>
     冷卻 ${SUPER.cd}s · 需要科技中心與超級武器基地 · 快捷鍵 R`,
+  levels: { low:'低', medium:'中', high:'高' },
+  tipMarker: (level, m, surges) => `<span class="t">🌊 預警：${({ low:'低', medium:'中', high:'高' })[level]} ×${m.toFixed(1)}</span>
+    湧浪：${surges.map(s => '×' + s.toFixed(1)).join(' · ')}<br>強度高的列會更快磨壞建築。`,
   tipPause: p => p ? '繼續（P / Space）' : '暫停（P / Space）',
   tipBox: s => `<span class="t">📦 物資箱</span>點擊 +10–17 材料 · ${s} 秒後消失`,
   tipHome: h => `<span class="t">🏠 我的家</span>水深 <b>${h}</b>，超過 ${LOSE_DEPTH} 即失敗。`,
