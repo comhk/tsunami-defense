@@ -230,6 +230,6 @@ Together they form a learnable loop: read the forecast, prepare, react with gate
 ## Open questions
 
 - Should power gate towers (D3)? The overview flagged that towers ignore power. This decides whether power is a defence concern or only an economy one.
-- Is wave-train variance (B1) seeded per run, or fixed per wave for learnability? This interacts with F2/F3.
+- ~~Is wave-train variance (B1) seeded per run, or fixed per wave for learnability?~~ Resolved: surge timing is fixed per wave (`.scratch/wave-trains/spec.md`), and bay location (B7) is seeded per run (`.scratch/warning-buoy/spec.md`).
 - Does an elevation model (A1) fit the half-3D renderer (`drawEntity3D`), or is a coloured height tint enough?
 - Claims not marked ✔ come from search excerpts. These hosts were still blocked when this note was written: usgs.gov, gfdrr.org, gamedeveloper.com, link.springer.com, ir.library.oregonstate.edu, nbcnews.com, czech-in.org, arxiv.org, ndbc.noaa.gov, *.fandom.com, dwarffortresswiki.org, handdrawngames.com, paradoxinteractive.com, fpcj.jp, earth-planets-space.springeropen.com, jstage.jst.go.jp, atcouncil.org, pwri.go.jp, pianc-jp.org, icce-ojs-tamu.tdl.org, science.nasa.gov, bloonswiki.com, doi.org, sciencedirect.com, lfestorage.s3.us-east-2.amazonaws.com, destructoid.com. fema.gov was reachable, but the P-646 PDF was too large to fetch. Verify the Kamaishi, GEONET 1.2 m, Fudai and Shizuoka figures before using them in game text.
