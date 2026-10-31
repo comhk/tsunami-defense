@@ -145,6 +145,7 @@ const BUOY_COST = 30;                // 預警浮標成本
 const BEACH_X = 27;                  // 海灘起點（浮標只能建在 x >= 此值）
 const LEVEL_LOW = 0.9;               // 倍率低於此值為「低」
 const LEVEL_HIGH = 1.15;             // 倍率高於此值為「高」；之間為「中」
+const LEVEL_COLOR = { low:'#6fd08c', medium:'#ffd166', high:'#ff5a5a' };  // 預警標記顏色
 const REVISE_AT = 10;                // 準備階段剩餘此秒數時，預警修正為真實值
 const REVISE_FLASH = 3;              // 修正後被調高的標記閃爍秒數
 const START_MATS = 80;               // 開局材料
@@ -164,7 +165,7 @@ const DEFS = {
   tech:      { cost:150, hp:400,  block:true, size:2, color:'#7a5a9a', h:26, key:'T' },
   superbase: { cost:300,hp:500, block:true, size:2, color:'#a05050', h:30, key:'Y' },
   // 預警浮標：不擋水（不進 G.grid）、水不會傷害它；只能建在海灘，全局最多一個
-  buoy:      { cost:BUOY_COST, hp:100, block:false, size:1, color:'#ffb347', h:14, key:'B', beachOnly:true, unique:true },
+  buoy:      { cost:BUOY_COST, hp:100, block:false, size:1, color:'#ffb347', h:14, key:'B' },
 };
 
 const SUPER = { cd:45, radius:6 };
@@ -198,8 +199,8 @@ function bayProfile(c){
   const bump = Array.from({length:ROWS}, (_, y) => Math.exp(-0.5 * ((y - c) / BAY_WIDTH) ** 2));
   const mean = bump.reduce((a, b) => a + b, 0) / ROWS;
   const hi = Math.max(...bump) - mean, lo = mean - Math.min(...bump);
-  const k = Math.min((BAY_PEAK - 1) / hi, (1 - BAY_FLOOR) / lo);
-  return bump.map(b => 1 + k * (b - mean));
+  const scale = Math.min((BAY_PEAK - 1) / hi, (1 - BAY_FLOOR) / lo);
+  return bump.map(b => 1 + scale * (b - mean));
 }
 // 由本局種子得出每波的每列倍率；第 1 波平坦
 function rollBays(seed){
@@ -211,7 +212,7 @@ function rollBays(seed){
 }
 // 早期預警：從第 2 波起，低估緊鄰中心列的 1–2 列，各低一級（絕不動中心列、不高估）
 // 被低估列的顯示倍率取低一級範圍的中點，必定落在該級範圍內
-const lowerMult = m => levelOf(m) === 'high' ? (LEVEL_LOW + LEVEL_HIGH) / 2 : (BAY_FLOOR + LEVEL_LOW) / 2;
+const lowerLevelMult = m => levelOf(m) === 'high' ? (LEVEL_LOW + LEVEL_HIGH) / 2 : (BAY_FLOOR + LEVEL_LOW) / 2;
 function rollEarly(seed, bays){
   const rng = seededRng(seed ^ 0x5bd1e995);
   return bays.map((prof, w) => {
@@ -219,8 +220,8 @@ function rollEarly(seed, bays){
     const out = {};
     if(w === 0) return out;
     const c = prof.indexOf(Math.max(...prof));
-    const cand = [c + side, c - side].filter(y => y >= 0 && y < ROWS && levelOf(prof[y]) !== 'low');
-    for(const y of cand.slice(0, n)) out[y] = Math.min(prof[y], lowerMult(prof[y]));
+    const nearRows = [c + side, c - side].filter(y => y >= 0 && y < ROWS && levelOf(prof[y]) !== 'low');
+    for(const y of nearRows.slice(0, n)) out[y] = Math.min(prof[y], lowerLevelMult(prof[y]));
     return out;
   });
 }
@@ -406,7 +407,7 @@ function startGame(){
   G.seed = nextSeed != null ? nextSeed : Math.floor(Math.random() * 4294967296);
   nextSeed = null;
   G.bays = rollBays(G.seed);
-  G.early = rollEarly(G.seed, G.bays);
+  G.earlyForecast = rollEarly(G.seed, G.bays);
   G.revised = false; G.reviseFlash = 0; G.raisedRows = [];
   G.materials = START_MATS;
   G.timer = WAVES[0].prep;
@@ -459,6 +460,16 @@ function surgeCues(w, p0, p1){
       toast(L().tSurgeWarn(k+1, Math.max(1, Math.ceil((at - p1) / G.waveSpeed))), true);
     }
     if(p0 < at && p1 >= at) G.shake = Math.max(G.shake, 8);
+  }
+}
+
+// 準備階段剩 REVISE_AT 秒：預警改為真實值（只會調高）。有浮標才提示並閃爍
+function reviseForecast(){
+  G.revised = true;
+  G.raisedRows = Object.keys(G.earlyForecast[G.wave]).map(Number).sort((a, b) => a - b);
+  if(G.buoy && G.raisedRows.length){
+    G.reviseFlash = REVISE_FLASH;
+    toast(L().tRevised(G.raisedRows.map(y => y + 1)), true);
   }
 }
 
@@ -578,12 +589,16 @@ function inHome(x,y){
   return x >= HOME.x && x < HOME.x+HOME.w && y >= HOME.y && y < HOME.y+HOME.h;
 }
 
+// (gx, gy) 上的預警浮標（浮標不在 G.grid 內）
+function buoyAt(gx, gy){
+  return G.buoy && G.buoy.gx === gx && G.buoy.gy === gy ? G.buoy : null;
+}
+
 function canPlace(def, gx, gy){
-  if(def.unique && G.structures.some(s => s.def === def)) return false;
-  if(def.beachOnly && gx < BEACH_X) return false;
-  if(G.buoy && G.buoy.gx === gx && G.buoy.gy === gy) return false;
+  if(def === DEFS.buoy && (G.buoy || gx < BEACH_X)) return false;  // 浮標：全局一個，只能建在海灘
   for(let dx=0;dx<def.size;dx++) for(let dy=0;dy<def.size;dy++){
     const x = gx+dx, y = gy+dy;
+    if(buoyAt(x,y)) return false;
     if(x<0 || x>=COLS || y<0 || y>=ROWS) return false;
     if(G.grid[x][y]) return false;
     if(inHome(x,y)) return false;
@@ -607,7 +622,7 @@ function placeEntity(defId, gx, gy){
     if(def.block) G.grid[gx+dx][gy+dy] = ent;  // 不擋水的建築不進格網，水流不受影響
     ent.cells.push([gx+dx, gy+dy]);
   }
-  if(defId === 'buoy') G.buoy = ent;
+  if(def === DEFS.buoy) G.buoy = ent;
   G.structures.push(ent);
   spawnParticles(gx*TX + def.size*TX/2, gy*TY + def.size*TY/2, 6, def.color, 70);
 
@@ -721,15 +736,6 @@ function updateTowers(dt){
 }
 
 /* ══════════════ 垃圾車 ══════════════ */
-// 準備階段剩 REVISE_AT 秒：預警改為真實值（只會調高）。有浮標才提示並閃爍
-function reviseForecast(){
-  G.revised = true;
-  G.raisedRows = Object.keys(G.early[G.wave]).map(Number).sort((a, b) => a - b);
-  if(G.buoy && G.raisedRows.length){
-    G.reviseFlash = REVISE_FLASH;
-    toast(L().tRevised(G.raisedRows.map(y => y + 1)), true);
-  }
-}
 function updateTrucks(dt){
   if(G.phase === 'prep'){
     // 垃圾場生產
@@ -1049,10 +1055,10 @@ function tipFor(key){
 function forecast(){
   if(!G.buoy || G.wave >= WAVES.length) return null;
   // 準備階段尚未修正時顯示早期（低估）預警；之後與之後才建的浮標都顯示真實值
-  const w = G.wave, early = G.phase === 'prep' && !G.revised ? G.early[w] : {};
+  const w = G.wave, early = G.phase === 'prep' && !G.revised ? G.earlyForecast[w] : {};
   const prof = G.bays[w].map((m, y) => early[y] != null ? early[y] : m);
   return { wave: w, rows: prof.map(m => ({
-    mult: m, level: levelOf(m), surges: WAVES[w].pulses.map(p => p.power * m) })) };
+    mult: m, level: levelOf(m), surges: WAVES[w].pulses.map(p => p.power) })) };
 }
 function markerTip(y){
   const f = forecast();
@@ -1062,7 +1068,7 @@ function markerTip(y){
 }
 // 滑鼠停在 (gx, gy) 的提示：標記隨時可看；其他地圖提示只在暫停時
 function hoverTip(gx, gy){
-  if(G.buoy && gx === COLS-1 && !(G.paused && G.grid[gx][gy])){
+  if(G.buoy && gx === COLS-1 && !(G.paused && (G.grid[gx][gy] || buoyAt(gx, gy)))){
     const t = markerTip(gy);
     if(t) return t;
   }
@@ -1072,7 +1078,7 @@ function hoverTip(gx, gy){
 // 地圖上的提示（只在暫停時顯示）
 function worldTip(gx, gy){
   if(gx<0 || gx>=COLS || gy<0 || gy>=ROWS) return '';
-  const ent = G.grid[gx][gy] || (G.buoy && G.buoy.gx === gx && G.buoy.gy === gy ? G.buoy : null);
+  const ent = G.grid[gx][gy] || buoyAt(gx, gy);
   if(ent) return defTip(ent.defId, ent);
   const box = G.boxes.find(b => b.x === gx && b.y === gy);
   if(box) return L().tipBox(Math.ceil(box.life));
@@ -1359,7 +1365,6 @@ function drawAllEntities(){
 }
 
 // 預警標記：海邊最右一欄，每列一支向左箭頭，顏色依強度
-const LEVEL_COLOR = { low:'#6fd08c', medium:'#ffd166', high:'#ff5a5a' };
 function drawMarkers(){
   const f = forecast();
   if(!f) return;
@@ -1985,7 +1990,7 @@ showMenu();
 
 requestAnimationFrame(t => { lastT = t; loop(t); });
 
-// 只在測試旗標下公開唯讀測試介面
+// 只在測試旗標下公開測試介面：狀態與函式（G、update…）加上 setSeed／place 兩個會改變遊戲的入口
 if(TEST) window.__tsunami = Object.freeze({ G, update, startGame, WAVES, HOME, COLS, ROWS, LOSE_DEPTH, pulseIndexAt, nextPulseIndex,
   BAY_PEAK, BAY_FLOOR, BUOY_COST, LEVEL_LOW, LEVEL_HIGH, REVISE_AT,
   forecast, markerTip, hoverTip,

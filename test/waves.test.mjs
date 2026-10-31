@@ -561,7 +561,7 @@ test('forecast: covers the next wave in prep and the current wave in tsunami and
   assert.ok(seen.some(s => s[0] === 'drain'));
 });
 
-test('forecast: each row lists every surge\'s strength (surge power x row multiplier)', () => {
+test('forecast: each row lists every surge\'s strength (raw surge power)', () => {
   const { hook, G } = loadGame();
   hook.setSeed(42); hook.startGame(); G.materials = 1000;
   hook.place('buoy', 27, 0);
@@ -569,11 +569,11 @@ test('forecast: each row lists every surge\'s strength (surge power x row multip
   const f = hook.forecast(), p = hook.rowProfile(3);
   f.rows.forEach((r, y) => {
     assert.equal(r.surges.length, hook.WAVES[3].pulses.length);
-    r.surges.forEach((s, k) => assert.equal(s, hook.WAVES[3].pulses[k].power * p[y]));
+    r.surges.forEach((s, k) => assert.equal(s, hook.WAVES[3].pulses[k].power));
   });
 });
 
-test('marker tooltip: shows the row multiplier and each surge, in both languages', () => {
+test('marker tooltip: shows the row multiplier and each raw surge, in both languages', () => {
   for(const [lang, word] of [['en', 'Surges'], ['zh-Hant', '湧浪']]){
     const { hook, G } = loadGame({ lang });
     hook.setSeed(42); hook.startGame(); G.materials = 1000;
@@ -626,7 +626,7 @@ test('early forecast: understates only 1-2 rows beside the centre, by exactly on
       assert.ok(f.rows[y].mult < p[y]);
       assert.equal(rank(f.rows[y].level), rank(levelOf(p[y])) - 1, `${tag}: row ${y} not exactly one level down`);
       assert.equal(f.rows[y].level, levelOf(f.rows[y].mult), 'hover number matches the lowered level');
-      f.rows[y].surges.forEach((sv, k) => assert.equal(sv, hook.WAVES[n].pulses[k].power * f.rows[y].mult));
+      f.rows[y].surges.forEach((sv, k) => assert.equal(sv, hook.WAVES[n].pulses[k].power));
     }
     f.rows.forEach((r, y) => { assert.ok(r.mult <= p[y]); if(!low.includes(y)) assert.equal(r.mult, p[y]); });
     assert.equal(f.rows[c].mult, p[c], 'centre is never understated');
@@ -752,4 +752,36 @@ test('buoy strings exist in both languages', () => {
     const T = window.TSUNAMI_LANGS[lang]({ SUPER: {}, WAVES: [], BASE_INCOME: 0, MAX_TRUCKS: 0, LOSE_DEPTH: 0 });
     assert.ok(T.names.buoy && T.role.buoy && T.tipMarker && T.levels.low && T.levels.medium && T.levels.high);
   }
+});
+
+// ── Warning buoy review fixes ──
+test('buoy: a 2x2 structure cannot cover the buoy through any of its cells', () => {
+  const { hook, G } = loadGame();
+  hook.setSeed(1); hook.startGame(); G.materials = 1000;
+  assert.ok(hook.place('buoy', 28, 5));
+  for(const [x, y] of [[27, 4], [28, 4], [27, 5], [28, 5]])
+    assert.equal(hook.place('recycle', x, y), false, `recycler at ${x},${y} overlaps the buoy`);
+  assert.equal(hook.place('recycle', 29, 5), true, 'a non-overlapping recycler is fine');
+});
+
+test('marker tooltip: Surges lists raw surge strengths, not multiplied by the row', () => {
+  const { hook, G } = loadGame();
+  hook.setSeed(42); hook.startGame(); G.materials = 1000;
+  hook.place('buoy', 27, 0);
+  G.wave = 3; G.revised = true;
+  const m = hook.rowProfile(3)[5];
+  assert.notEqual(m, 1);
+  const raw = hook.WAVES[3].pulses.map(p => '×' + p.power.toFixed(1)).join(' · ');
+  assert.ok(hook.markerTip(5).includes('Surges: ' + raw), hook.markerTip(5));
+});
+
+test('hover: a buoy on the sea-edge column shows its own tooltip while paused', () => {
+  const { hook, G } = loadGame();
+  hook.setSeed(42); hook.startGame(); G.materials = 1000;
+  assert.ok(hook.place('buoy', hook.COLS - 1, 5));
+  const marker = hook.hoverTip(hook.COLS - 1, 5);
+  assert.ok(marker.includes('Forecast'), marker);
+  G.paused = true;
+  assert.ok(hook.hoverTip(hook.COLS - 1, 5).includes('Warning Buoy') || hook.hoverTip(hook.COLS - 1, 5).includes('Beach only'));
+  assert.ok(hook.hoverTip(hook.COLS - 1, 6).includes('Forecast'), 'other edge cells still show markers');
 });

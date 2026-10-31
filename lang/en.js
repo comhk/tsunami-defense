@@ -67,8 +67,8 @@
   tipSuper: () => `<span class="t">🛰️ Orbital Ion Cannon</span>Clears all water within radius ${SUPER.radius} and briefly freezes it.<br>
     Cooldown ${SUPER.cd}s · Needs a Tech Center and a Super Base · Hotkey R`,
   levels: { low:'Low', medium:'Medium', high:'High' },
-  tipMarker: (level, m, surges) => `<span class="t">🌊 Forecast: ${({ low:'Low', medium:'Medium', high:'High' })[level]} ×${m.toFixed(1)}</span>
-    Surges: ${surges.map(s => '×' + s.toFixed(1)).join(' · ')}<br>High rows wear structures down faster.`,
+  tipMarker(level, m, surges){ return `<span class="t">🌊 Forecast: ${this.levels[level]} ×${m.toFixed(1)}</span>
+    Surges: ${surges.map(s => '×' + s.toFixed(1)).join(' · ')}<br>High rows wear structures down faster.` },
   tipPause: p => p ? 'Resume (P / Space)' : 'Pause (P / Space)',
   tipBox: s => `<span class="t">📦 Supply box</span>Click for +10–17 materials · disappears in ${s} s`,
   tipHome: h => `<span class="t">🏠 Home</span>Water depth <b>${h}</b>. Above ${LOSE_DEPTH} you lose.`,

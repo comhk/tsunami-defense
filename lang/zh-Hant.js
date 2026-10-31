@@ -67,8 +67,8 @@
   tipSuper: () => `<span class="t">🛰️ 軌道離子炮</span>清空半徑 ${SUPER.radius} 內的水並短暫凍結。<br>
     冷卻 ${SUPER.cd}s · 需要科技中心與超級武器基地 · 快捷鍵 R`,
   levels: { low:'低', medium:'中', high:'高' },
-  tipMarker: (level, m, surges) => `<span class="t">🌊 預警：${({ low:'低', medium:'中', high:'高' })[level]} ×${m.toFixed(1)}</span>
-    湧浪：${surges.map(s => '×' + s.toFixed(1)).join(' · ')}<br>強度高的列會更快磨壞建築。`,
+  tipMarker(level, m, surges){ return `<span class="t">🌊 預警：${this.levels[level]} ×${m.toFixed(1)}</span>
+    湧浪：${surges.map(s => '×' + s.toFixed(1)).join(' · ')}<br>強度高的列會更快磨壞建築。` },
   tipPause: p => p ? '繼續（P / Space）' : '暫停（P / Space）',
   tipBox: s => `<span class="t">📦 物資箱</span>點擊 +10–17 材料 · ${s} 秒後消失`,
   tipHome: h => `<span class="t">🏠 我的家</span>水深 <b>${h}</b>，超過 ${LOSE_DEPTH} 即失敗。`,
