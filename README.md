@@ -38,7 +38,7 @@
 ## 語言 / Language
 
 支援繁體中文與 English。第一次按「開始遊戲」時會詢問語言，之後記住選擇（瀏覽器 `localStorage`）；
-開始畫面的「Language / 語言」可隨時切換。所有文字都在 `lang/` 內（`zh-Hant.js`、`en.js`）；新增語言時加一個檔案，並在 `index.html` 加一行 `<script>`。
+開始畫面的「Language / 語言」可隨時切換。所有文字都在 `lang/` 內（`zh-Hant.js`、`en.js`）；新增語言時加一個檔案，並在 `index.html` 的 `js/` 之前加一行 `<script>`。
 
 Traditional Chinese and English are supported. The game asks on the first Start and remembers the choice;
 use "Language / 語言" on the start screen to switch. All strings live in `lang/` (`zh-Hant.js`, `en.js`).
@@ -57,20 +57,35 @@ python -m http.server 8000
 
 ## 發佈
 
-每次 push 到 `main`，GitHub Actions（`.github/workflows/pages.yml`）會自動把 `index.html` 與 `lang/` 發佈到 GitHub Pages。
+每次 push 到 `main`，GitHub Actions（`.github/workflows/pages.yml`）會自動把 `index.html`、`js/` 與 `lang/` 發佈到 GitHub Pages。
 只發佈遊戲本身，`docs/`、`.scratch/` 不會公開。
 
 ## 結構
 
 ```
-index.html   # 全部遊戲邏輯、渲染、UI（Canvas 2D，半 3D 等角擠出繪製）
+index.html   # 頁面、樣式，並按次序載入 lang/ 與 js/
+js/          # 遊戲程式，每個檔一個系統（按 index.html 內 <script> 次序載入，共用同一全域範圍）
+  config.js        # 常數、DEFS、WAVES、海灣與預警參數
+  state.js         # 遊戲狀態 G 與 init()
+  canvas.js, util.js, render-ground.js
+  i18n.js, menu.js # 語言切換、開始畫面
+  flow.js          # 開局、波次流程、湧浪提示、預警修正
+  water.js         # 水體模擬（注水、流動、滲水）
+  entities.js      # 建造、拆除、解鎖
+  towers.js, trucks.js, boxes.js, super.js
+  update.js        # 每幀主更新、電力
+  input.js, tips.js, pause.js, toast.js
+  render.js        # Canvas 繪製（半 3D 等角擠出）
+  hud.js           # 建造列與 HUD
+  main.js          # 縮放、主迴圈、啟動、測試介面
 lang/        # 語言檔（繁體中文、English）
+test/        # 無依賴的 Node 測試（node test/waves.test.mjs）
 docs/        # 遊戲研究筆記、agent 設定
 .scratch/    # 本地 issue（markdown）
 .github/     # GitHub Pages 自動發佈 workflow
 ```
 
-## 參數速查（改數值就喺 `index.html` 頂部）
+## 參數速查（改數值就喺 `js/config.js`）
 
 - `COLS / ROWS`：地圖 32 × 16 格
 - `DEFS`：所有建築的名稱、成本、HP、高度、快捷鍵

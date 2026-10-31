@@ -1,4 +1,4 @@
-// Loads the real game (lang/*.js + the inline game <script> in index.html)
+// Loads the real game (every <script src> in index.html, in order: lang/*.js then js/*.js)
 // into a node:vm context with a minimal fake browser. No dependencies.
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -59,9 +59,8 @@ function mulberry32(a){
  */
 export function loadGame({ testFlag = true, noLose = false, lang = 'en', seed = 1 } = {}){
   const html = readFileSync(join(ROOT, 'index.html'), 'utf8');
-  const langSrcs = [...html.matchAll(/<script src="([^"]+)"><\/script>/g)].map(m => m[1]);
-  const inline = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)];
-  if(inline.length !== 1) throw new Error(`expected one inline <script> in index.html, found ${inline.length}`);
+  const srcs = [...html.matchAll(/<script src="([^"]+)"><\/script>/g)].map(m => m[1]);
+  if(!srcs.some(s => s.startsWith('js/'))) throw new Error('expected js/*.js <script src> tags in index.html');
 
   const els = new Map();
   const store = new Map(lang ? [['tsunami.lang', lang]] : []);
@@ -91,9 +90,9 @@ export function loadGame({ testFlag = true, noLose = false, lang = 'en', seed = 
   vm.createContext(ctx);
   vm.runInContext('Math', ctx).random = mulberry32(seed);
 
-  for(const src of langSrcs)
+  // Classic scripts in one context share top-level const/let, like a browser page
+  for(const src of srcs)
     vm.runInContext(readFileSync(join(ROOT, src), 'utf8'), ctx, { filename: src });
-  vm.runInContext(inline[0][1], ctx, { filename: 'index.html<script>' });
 
   const hook = ctx.__tsunami;
   return { window: ctx, document, hook, G: hook && hook.G };
