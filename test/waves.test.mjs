@@ -19,16 +19,23 @@ test('the test hook exists only when the test flag is set', () => {
   assert.equal(game.hook.G.phase, 'menu');
 });
 
-test('balance: total inflow per wave with no structures stays within ±15% of baseline', () => {
-  const rows = playAllWaves(loadGame({ noLose: true }));
-  console.log('# wave  inflow   peak home depth (info only)');
-  for(const r of rows)
-    console.log(`#  ${r.wave}   ${r.inflow.toFixed(1).padStart(7)}   ${r.peakHome.toFixed(3)}`);
-  rows.forEach((r, i) => {
-    const base = BASELINE_INFLOW[i];
-    assert.ok(Math.abs(r.inflow - base) <= TOLERANCE * base,
-      `wave ${r.wave}: inflow ${r.inflow.toFixed(1)} is outside ±${TOLERANCE * 100}% of baseline ${base}`);
-  });
+// Bay seeds the balance check runs across (warning-buoy ticket 01).
+const BALANCE_SEEDS = [1, 2, 3, 4, 5, 42, 1234];
+
+test('balance: total inflow per wave with no structures stays within ±15% of baseline, across bay seeds', () => {
+  console.log('# seed  wave  inflow   peak home depth (info only)');
+  for(const seed of BALANCE_SEEDS){
+    const game = loadGame({ noLose: true });
+    game.hook.setSeed(seed);
+    const rows = playAllWaves(game);
+    for(const r of rows)
+      console.log(`# ${String(seed).padStart(4)}   ${r.wave}   ${r.inflow.toFixed(1).padStart(7)}   ${r.peakHome.toFixed(3)}`);
+    rows.forEach((r, i) => {
+      const base = BASELINE_INFLOW[i];
+      assert.ok(Math.abs(r.inflow - base) <= TOLERANCE * base,
+        `seed ${seed} wave ${r.wave}: inflow ${r.inflow.toFixed(1)} is outside ±${TOLERANCE * 100}% of baseline ${base}`);
+    });
+  }
 });
 
 test('inflow per wave does not depend on the frame rate', () => {
@@ -343,4 +350,52 @@ test('wave tooltip shows the surge count and the biggest surge, in both language
   assert.equal(line('en', 4), '3 surges · biggest: #3 · Flow speed ×1.3 · Prep 32s');
   assert.equal(line('zh-Hant', 1), '1 道湧浪 · 水流速度 ×1 · 準備 45s');
   assert.equal(line('zh-Hant', 5), '3 道湧浪 · 最大：第 2 道 · 水流速度 ×1.4 · 準備 30s');
+});
+
+// ── Bays (warning-buoy ticket 01) ──
+// Load a game, set the run seed, start the run, and return every wave's row profile.
+function profilesFor(seed){
+  const { hook } = loadGame();
+  hook.setSeed(seed);
+  hook.startGame();
+  return Array.from(hook.WAVES, (_, w) => [...hook.rowProfile(w)]);
+}
+
+test('bays: the same seed gives the same profiles, different seeds give different ones', () => {
+  assert.deepEqual(profilesFor(7), profilesFor(7));
+  assert.notDeepEqual(profilesFor(7), profilesFor(8));
+});
+
+test('bays: wave 1 is flat; later waves average 1 and stay within the peak and floor', () => {
+  const { hook } = loadGame();
+  for(const seed of [1, 2, 3, 42, 1234]){
+    const profiles = profilesFor(seed);
+    assert.ok(profiles[0].every(m => m === 1), `seed ${seed}: wave 1 is not flat`);
+    profiles.slice(1).forEach((p, i) => {
+      const mean = p.reduce((a, b) => a + b, 0) / p.length;
+      assert.equal(p.length, hook.ROWS);
+      assert.ok(Math.abs(mean - 1) < 1e-9, `seed ${seed} wave ${i + 2}: mean ${mean}`);
+      assert.ok(Math.max(...p) <= hook.BAY_PEAK + 1e-9, `seed ${seed} wave ${i + 2}: peak ${Math.max(...p)}`);
+      assert.ok(Math.min(...p) >= hook.BAY_FLOOR - 1e-9, `seed ${seed} wave ${i + 2}: floor ${Math.min(...p)}`);
+      assert.ok(Math.max(...p) > 1.2, `seed ${seed} wave ${i + 2}: no visible bay`);
+    });
+  }
+});
+
+test('bays: during a strong surge a high row reaches a higher edge depth than a low row', () => {
+  // Wave 5's second surge is the strongest (x1.4); sample the edge midway through it.
+  const n = 4;
+  const { hook, G } = loadGame({ noLose: true });
+  hook.setSeed(42);
+  hook.startGame();
+  G.wave = n;
+  G.timer = 0;
+  hook.update(DT);  // prep -> tsunami
+  const s = hook.WAVES[n].pulses[1];
+  while(G.waveProgress < s.at + s.dur / 2) hook.update(DT);
+  const p = hook.rowProfile(n);
+  const hi = p.indexOf(Math.max(...p)), lo = p.indexOf(Math.min(...p));
+  const edge = y => G.water[y * hook.COLS + hook.COLS - 1];
+  assert.ok(edge(hi) > edge(lo) + 0.05,
+    `high row ${hi} (x${p[hi].toFixed(2)}) edge ${edge(hi).toFixed(3)} vs low row ${lo} (x${p[lo].toFixed(2)}) edge ${edge(lo).toFixed(3)}`);
 });

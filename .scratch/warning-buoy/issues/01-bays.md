@@ -4,11 +4,11 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Tests: the same seed gives the same profiles, and different seeds give different profiles
-- [ ] Tests: wave 1 is flat; every later wave's profile has a mean of 1 (within rounding) and stays within the peak and floor constants
-- [ ] Tests: with no structures, total inflow per wave stays within ±15% of the ticket-01 baseline across several seeds; peak home depth is printed for information
-- [ ] Tests: a high row reaches a higher edge depth than a low row during a strong surge
-- [ ] Bay peak, floor and width are single constants
-- [ ] README parameter reference describes bays and their constants
+- [x] Tests: the same seed gives the same profiles, and different seeds give different profiles
+- [x] Tests: wave 1 is flat; every later wave's profile has a mean of 1 (within rounding) and stays within the peak and floor constants
+- [x] Tests: with no structures, total inflow per wave stays within ±15% of the ticket-01 baseline across several seeds; peak home depth is printed for information
+- [x] Tests: a high row reaches a higher edge depth than a low row during a strong surge
+- [x] Bay peak, floor and width are single constants
+- [x] README parameter reference describes bays and their constants
