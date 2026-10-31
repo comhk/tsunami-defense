@@ -6,7 +6,7 @@
   title: 'Tsunami: Last Line of Defense',
   names: { sandbag:'Sandbag', tree:'Tree Belt', wall:'Stone Wall', dike:'Dike', mg:'Machine Gun',
     rocket:'Rocket', frost:'Freeze Ray', dump:'Dump', power:'Power Plant', recycle:'Recycler',
-    tech:'Tech Center', superbase:'Super Base', super:'Orbital Ion Cannon' },
+    tech:'Tech Center', superbase:'Super Base', buoy:'Warning Buoy', super:'Orbital Ion Cannon' },
   role: {
     sandbag:  'Cheap water barrier. Good for plugging gaps fast.',
     tree:     'Medium barrier, tougher than a sandbag.',
@@ -20,6 +20,7 @@
     recycle:  '+2 materials per second during prep (halved when power is short).',
     tech:     'Unlocks the Super Base.',
     superbase:'Unlocks the Orbital Ion Cannon.',
+    buoy:     'Beach only, one per game. Water passes through it and never harms it. Shows each row\'s expected strength at the sea edge.',
   },
   menuH1: 'TSUNAMI', menuH2: 'LAST LINE OF DEFENSE',
   menuP: () => `A giant wave is coming. In the <span class="hi">prep phase</span>, collect supplies and build defences.<br>
@@ -37,6 +38,7 @@
   phasePrep: 'Prep', phaseTsunami: '⚠ Tsunami!', phaseDrain: 'Water receding…',
   phaseSurge: (n, total) => `⚠ Surge ${n} / ${total}`, phaseNextSurge: 'Next surge',
   tWaveIncoming: n => `⚠ Wave ${n} incoming!`,
+  tRevised: rows => `📡 Forecast revised: row${rows.length > 1 ? 's' : ''} ${rows.join(', ')} higher than first thought`,
   tSurgeWarn: (n, s) => `⚠ Surge ${n} in ${s} s!`,
   tNextWave: (n, s) => `Wave ${n} is coming — ${s} s to prepare`,
   tNoMats: 'Not enough materials', tCantBuild: "Can't build here", tMats: n => `+${n} materials`,
@@ -64,6 +66,9 @@
     ${w.pulses.length === 1 ? '1 surge' : `${w.pulses.length} surges · biggest: #${big}`} · Flow speed ×${w.speed} · Prep ${w.prep}s`,
   tipSuper: () => `<span class="t">🛰️ Orbital Ion Cannon</span>Clears all water within radius ${SUPER.radius} and briefly freezes it.<br>
     Cooldown ${SUPER.cd}s · Needs a Tech Center and a Super Base · Hotkey R`,
+  levels: { low:'Low', medium:'Medium', high:'High' },
+  tipMarker(level, m, surges){ return `<span class="t">🌊 Forecast: ${this.levels[level]} ×${m.toFixed(1)}</span>
+    Surges: ${surges.map(s => '×' + s.toFixed(1)).join(' · ')}<br>High rows wear structures down faster.` },
   tipPause: p => p ? 'Resume (P / Space)' : 'Pause (P / Space)',
   tipBox: s => `<span class="t">📦 Supply box</span>Click for +10–17 materials · disappears in ${s} s`,
   tipHome: h => `<span class="t">🏠 Home</span>Water depth <b>${h}</b>. Above ${LOSE_DEPTH} you lose.`,

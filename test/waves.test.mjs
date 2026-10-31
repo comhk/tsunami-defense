@@ -2,6 +2,7 @@
 // Run: node test/waves.test.mjs   (no dependencies)
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { loadGame, playAllWaves, watchInflow, DT } from './harness.mjs';
 
 // "Before" baseline: total water poured in per wave with no structures,
@@ -19,16 +20,23 @@ test('the test hook exists only when the test flag is set', () => {
   assert.equal(game.hook.G.phase, 'menu');
 });
 
-test('balance: total inflow per wave with no structures stays within ±15% of baseline', () => {
-  const rows = playAllWaves(loadGame({ noLose: true }));
-  console.log('# wave  inflow   peak home depth (info only)');
-  for(const r of rows)
-    console.log(`#  ${r.wave}   ${r.inflow.toFixed(1).padStart(7)}   ${r.peakHome.toFixed(3)}`);
-  rows.forEach((r, i) => {
-    const base = BASELINE_INFLOW[i];
-    assert.ok(Math.abs(r.inflow - base) <= TOLERANCE * base,
-      `wave ${r.wave}: inflow ${r.inflow.toFixed(1)} is outside ±${TOLERANCE * 100}% of baseline ${base}`);
-  });
+// Bay seeds the balance check runs across (warning-buoy ticket 01).
+const BALANCE_SEEDS = [1, 2, 3, 4, 5, 42, 1234];
+
+test('balance: total inflow per wave with no structures stays within ±15% of baseline, across bay seeds', () => {
+  console.log('# seed  wave  inflow   peak home depth (info only)');
+  for(const seed of BALANCE_SEEDS){
+    const game = loadGame({ noLose: true });
+    game.hook.setSeed(seed);
+    const rows = playAllWaves(game);
+    for(const r of rows)
+      console.log(`# ${String(seed).padStart(4)}   ${r.wave}   ${r.inflow.toFixed(1).padStart(7)}   ${r.peakHome.toFixed(3)}`);
+    rows.forEach((r, i) => {
+      const base = BASELINE_INFLOW[i];
+      assert.ok(Math.abs(r.inflow - base) <= TOLERANCE * base,
+        `seed ${seed} wave ${r.wave}: inflow ${r.inflow.toFixed(1)} is outside ±${TOLERANCE * 100}% of baseline ${base}`);
+    });
+  }
 });
 
 test('inflow per wave does not depend on the frame rate', () => {
@@ -343,4 +351,437 @@ test('wave tooltip shows the surge count and the biggest surge, in both language
   assert.equal(line('en', 4), '3 surges · biggest: #3 · Flow speed ×1.3 · Prep 32s');
   assert.equal(line('zh-Hant', 1), '1 道湧浪 · 水流速度 ×1 · 準備 45s');
   assert.equal(line('zh-Hant', 5), '3 道湧浪 · 最大：第 2 道 · 水流速度 ×1.4 · 準備 30s');
+});
+
+// ── Bays (warning-buoy ticket 01) ──
+// Load a game, set the run seed, start the run, and return every wave's row profile.
+function profilesFor(seed){
+  const { hook } = loadGame();
+  hook.setSeed(seed);
+  hook.startGame();
+  return Array.from(hook.WAVES, (_, w) => [...hook.rowProfile(w)]);
+}
+
+test('bays: the same seed gives the same profiles, different seeds give different ones', () => {
+  assert.deepEqual(profilesFor(7), profilesFor(7));
+  assert.notDeepEqual(profilesFor(7), profilesFor(8));
+});
+
+test('bays: wave 1 is flat; later waves average 1 and stay within the peak and floor', () => {
+  const { hook } = loadGame();
+  for(const seed of [1, 2, 3, 42, 1234]){
+    const profiles = profilesFor(seed);
+    assert.ok(profiles[0].every(m => m === 1), `seed ${seed}: wave 1 is not flat`);
+    profiles.slice(1).forEach((p, i) => {
+      const mean = p.reduce((a, b) => a + b, 0) / p.length;
+      assert.equal(p.length, hook.ROWS);
+      assert.ok(Math.abs(mean - 1) < 1e-9, `seed ${seed} wave ${i + 2}: mean ${mean}`);
+      assert.ok(Math.max(...p) <= hook.BAY_PEAK + 1e-9, `seed ${seed} wave ${i + 2}: peak ${Math.max(...p)}`);
+      assert.ok(Math.min(...p) >= hook.BAY_FLOOR - 1e-9, `seed ${seed} wave ${i + 2}: floor ${Math.min(...p)}`);
+      assert.ok(Math.max(...p) > 1.2, `seed ${seed} wave ${i + 2}: no visible bay`);
+    });
+  }
+});
+
+test('bays: during a strong surge a high row reaches a higher edge depth than a low row', () => {
+  // Wave 5's second surge is the strongest (x1.4); sample the edge midway through it.
+  const n = 4;
+  const { hook, G } = loadGame({ noLose: true });
+  hook.setSeed(42);
+  hook.startGame();
+  G.wave = n;
+  G.timer = 0;
+  hook.update(DT);  // prep -> tsunami
+  const s = hook.WAVES[n].pulses[1];
+  while(G.waveProgress < s.at + s.dur / 2) hook.update(DT);
+  const p = hook.rowProfile(n);
+  const hi = p.indexOf(Math.max(...p)), lo = p.indexOf(Math.min(...p));
+  const edge = y => G.water[y * hook.COLS + hook.COLS - 1];
+  assert.ok(edge(hi) > edge(lo) + 0.05,
+    `high row ${hi} (x${p[hi].toFixed(2)}) edge ${edge(hi).toFixed(3)} vs low row ${lo} (x${p[lo].toFixed(2)}) edge ${edge(lo).toFixed(3)}`);
+});
+
+// ── Row damage (ticket 04) ──
+// Start wave n (0-based) with the given bay seed, place walls at column x on
+// the given rows, then run `seconds` of the tsunami. Returns HP lost per row.
+function wallDamage(n, seed, x, rows, seconds){
+  const { hook, G } = loadGame({ noLose: true });
+  hook.setSeed(seed);
+  hook.startGame();
+  G.materials = 1e6;
+  for(const y of rows) assert.ok(hook.place('wall', x, y), `place wall at ${x},${y}`);
+  G.wave = n;
+  G.timer = 0;
+  hook.update(DT);  // prep -> tsunami
+  assert.equal(G.phase, 'tsunami');
+  for(let t = 0; t < seconds; t += DT) hook.update(DT);
+  return { lost: rows.map(y => G.grid[x][y] ? G.grid[x][y].maxHp - G.grid[x][y].hp : Infinity), profile: hook.rowProfile(n) };
+}
+
+test('row damage: a wall on a high row loses HP faster than one on a low row, in proportion', () => {
+  const n = 4, x = 22;
+  const { hook } = loadGame({ noLose: true });
+  hook.setSeed(42);
+  hook.startGame();
+  const p = hook.rowProfile(n);
+  // Interior rows only: top/bottom rows spill sideways one way, which changes depth.
+  const inner = p.map((m, y) => ({ m, y })).slice(1, -1).sort((a, b) => a.m - b.m);
+  const lo = inner[0].y, hi = inner[inner.length - 1].y;
+  const { lost: [dHi, dLo] } = wallDamage(n, 42, x, [hi, lo], 12);
+  assert.ok(dLo > 0 && Number.isFinite(dHi), `walls took damage and survived: hi ${dHi}, lo ${dLo}`);
+  const want = p[hi] / p[lo], got = dHi / dLo;
+  assert.ok(Math.abs(got / want - 1) < 0.15,
+    `HP lost ratio ${got.toFixed(3)} vs multiplier ratio ${want.toFixed(3)} (rows ${hi} x${p[hi].toFixed(2)}, ${lo} x${p[lo].toFixed(2)})`);
+});
+
+test('row damage: on wave 1 (flat) wall damage matches the pre-bay value on every row', () => {
+  // 173.04 HP lost in 12 s at x=22 was measured before row damage existed.
+  for(const seed of [1, 42]){
+    const { lost } = wallDamage(0, seed, 22, [4, 8, 12], 12);
+    for(const d of lost) assert.ok(Math.abs(d - 173.04) < 0.01, `seed ${seed}: lost ${d}`);
+  }
+});
+
+// ── Warning buoy and row markers (warning-buoy ticket 02) ──
+test('buoy: only on the beach (x >= 27), and only one', () => {
+  const { hook, G } = loadGame();
+  hook.setSeed(1);
+  hook.startGame();
+  G.materials = 1000;
+  assert.equal(hook.place('buoy', 26, 5), false, 'x=26 is not beach');
+  assert.equal(hook.place('buoy', 10, 5), false);
+  assert.equal(G.materials, 1000, 'failed placements cost nothing');
+  assert.equal(hook.place('buoy', 27, 5), true);
+  assert.equal(G.materials, 1000 - hook.BUOY_COST);
+  assert.equal(hook.place('buoy', 30, 9), false, 'a second buoy is refused');
+  assert.equal(G.structures.filter(s => s.defId === 'buoy').length, 1);
+});
+
+test('buoy: does not block water: a buoy on a row gives the same water as an empty row', () => {
+  const run = withBuoy => {
+    const { hook, G } = loadGame({ noLose: true });
+    hook.setSeed(1);
+    hook.startGame();
+    G.materials = 1000;
+    if(withBuoy) assert.ok(hook.place('buoy', 29, 6));
+    G.wave = 0; G.timer = 0;
+    hook.update(DT);
+    for(let i = 0; i < 60 * 5; i++) hook.update(DT);
+    return Array.from({ length: hook.COLS }, (_, x) => G.water[6 * hook.COLS + x]);
+  };
+  const a = run(true), b = run(false);
+  assert.deepEqual(a, b, 'water on the buoy row is identical with and without the buoy');
+  assert.ok(a[30] > 0.5 && a[20] > 0.05, 'water passes the buoy and reaches inland');
+});
+
+test('buoy: survives a full run of waves untouched, even with water covering it', () => {
+  const { hook, G } = loadGame({ noLose: true });
+  hook.setSeed(3);
+  hook.startGame();
+  G.materials = 1e6;
+  assert.ok(hook.place('buoy', 28, 8));
+  const buoy = G.structures[0];
+  let sawWater = false;
+  for(let t = 0; t < 1200 && G.phase !== 'win'; t += DT){
+    hook.update(DT);
+    if(G.water[8 * hook.COLS + 28] > 0.3) sawWater = true;
+  }
+  assert.equal(G.phase, 'win');
+  assert.ok(sawWater);
+  assert.equal(buoy.hp, buoy.maxHp);
+  assert.ok(G.structures.includes(buoy));
+});
+
+test('buoy: a wall behind it takes the same damage as without a buoy', () => {
+  const hp = withBuoy => {
+    const { hook, G } = loadGame({ noLose: true });
+    hook.setSeed(1); hook.startGame(); G.materials = 1e6;
+    hook.place('wall', 22, 8);
+    if(withBuoy) hook.place('buoy', 30, 8);
+    G.wave = 0; G.timer = 0; hook.update(DT);
+    for(let i = 0; i < 60 * 12; i++) hook.update(DT);
+    return G.grid[22][8].hp;
+  };
+  assert.equal(hp(true), hp(false));
+});
+
+// ── Forecast levels ──
+const levelOf = m => m < 0.9 ? 'low' : m > 1.15 ? 'high' : 'medium';
+
+test('forecast: none without a buoy; with one, each row\'s level matches the thresholds on every wave', () => {
+  const { hook, G } = loadGame();
+  hook.setSeed(42);
+  hook.startGame();
+  G.materials = 1000;
+  assert.equal(hook.forecast(), null);
+  hook.place('buoy', 27, 0);
+  G.revised = true;  // true values; the early understatement is covered below
+  for(let n = 0; n < hook.WAVES.length; n++){
+    G.wave = n;
+    const f = hook.forecast();
+    const p = hook.rowProfile(n);
+    assert.equal(f.rows.length, hook.ROWS);
+    f.rows.forEach((r, y) => {
+      assert.equal(r.mult, p[y]);
+      assert.equal(r.level, levelOf(p[y]), `wave ${n + 1} row ${y} x${p[y].toFixed(3)}`);
+    });
+  }
+  assert.equal(hook.LEVEL_LOW, 0.9);
+  assert.equal(hook.LEVEL_HIGH, 1.15);
+});
+
+test('forecast: a buoy built during wave 1 shows every row as medium x1.0', () => {
+  const { hook, G } = loadGame();
+  hook.setSeed(5);
+  hook.startGame();
+  G.materials = 1000;
+  hook.place('buoy', 29, 3);
+  assert.ok(hook.forecast().rows.every(r => r.level === 'medium' && r.mult === 1));
+  G.timer = 0; hook.update(DT);
+  assert.equal(G.phase, 'tsunami');
+  assert.ok(hook.forecast().rows.every(r => r.level === 'medium' && r.mult === 1));
+});
+
+test('forecast: covers the next wave in prep and the current wave in tsunami and drain', () => {
+  const { hook, G } = loadGame({ noLose: true });
+  hook.setSeed(9);
+  hook.startGame();
+  G.materials = 1000;
+  hook.place('buoy', 29, 3);
+  const seen = [];
+  let last = '';
+  for(let t = 0; t < 1200 && G.phase !== 'win'; t += DT){
+    hook.update(DT);
+    if(G.phase === 'win') break;
+    const key = G.phase + G.wave;
+    if(key !== last){ last = key; seen.push([G.phase, G.wave, hook.forecast().wave]); }
+  }
+  for(const [, wave, fw] of seen) assert.equal(fw, wave);
+  assert.ok(seen.some(s => s[0] === 'prep' && s[1] === 1), 'saw prep of wave 2');
+  assert.ok(seen.some(s => s[0] === 'drain'));
+});
+
+test('forecast: each row lists every surge\'s strength (raw surge power)', () => {
+  const { hook, G } = loadGame();
+  hook.setSeed(42); hook.startGame(); G.materials = 1000;
+  hook.place('buoy', 27, 0);
+  G.wave = 3; G.revised = true;
+  const f = hook.forecast(), p = hook.rowProfile(3);
+  f.rows.forEach((r, y) => {
+    assert.equal(r.surges.length, hook.WAVES[3].pulses.length);
+    r.surges.forEach((s, k) => assert.equal(s, hook.WAVES[3].pulses[k].power));
+  });
+});
+
+test('marker tooltip: shows the row multiplier and each raw surge, in both languages', () => {
+  for(const [lang, word] of [['en', 'Surges'], ['zh-Hant', '湧浪']]){
+    const { hook, G } = loadGame({ lang });
+    hook.setSeed(42); hook.startGame(); G.materials = 1000;
+    assert.equal(hook.markerTip(3), '', 'no buoy, no marker tooltip');
+    hook.place('buoy', 27, 0);
+    G.wave = 3;
+    const f = hook.forecast();
+    const tip = hook.markerTip(5);
+    assert.ok(tip.includes('×' + f.rows[5].mult.toFixed(1)), tip);
+    assert.ok(tip.includes(word), tip);
+    for(const s of f.rows[5].surges) assert.ok(tip.includes('×' + s.toFixed(1)), tip);
+  }
+});
+
+test('marker tooltips work while running; other map tooltips stay paused-only', () => {
+  const { hook, G } = loadGame();
+  hook.setSeed(42); hook.startGame(); G.materials = 1000;
+  hook.place('buoy', 27, 0);
+  assert.equal(G.paused, false);
+  assert.ok(hook.hoverTip(31, 4) !== '', 'marker cell while running');
+  assert.equal(hook.hoverTip(10, 4), '', 'plain cell while running');
+  hook.place('wall', 10, 4);
+  assert.equal(hook.hoverTip(10, 4), '', 'structure tooltip while running stays hidden');
+  G.paused = true;
+  assert.ok(hook.hoverTip(10, 4).includes('900'), 'structure tooltip while paused');
+});
+
+// ── Early forecast and revision (warning-buoy ticket 03) ──
+const startPrep = (seed, n, opts = {}) => {
+  const game = loadGame(opts);
+  const { hook, G } = game;
+  hook.setSeed(seed); hook.startGame(); G.materials = 1000;
+  G.wave = n; G.phase = 'prep'; G.timer = hook.WAVES[n].prep; G.revised = false;
+  return game;
+};
+const centreOf = p => p.indexOf(Math.max(...p));
+const rank = l => ({ low: 0, medium: 1, high: 2 })[l];
+const SEEDS = [1, 2, 3, 4, 5, 42, 1234, 99, 7, 2024];
+
+test('early forecast: understates only 1-2 rows beside the centre, by exactly one level, never overstates', () => {
+  for(const seed of SEEDS) for(let n = 1; n < 5; n++){
+    const { hook } = startPrep(seed, n);
+    hook.place('buoy', 27, 0);
+    const p = hook.rowProfile(n), c = centreOf(p), f = hook.forecast();
+    const low = f.rows.map((r, y) => y).filter(y => f.rows[y].mult !== p[y]);
+    const tag = `seed ${seed} wave ${n + 1}`;
+    assert.ok(low.length >= 1 && low.length <= 2, `${tag}: ${low.length} rows understated`);
+    for(const y of low){
+      assert.equal(Math.abs(y - c), 1, `${tag}: row ${y} is not beside centre ${c}`);
+      assert.ok(f.rows[y].mult < p[y]);
+      assert.equal(rank(f.rows[y].level), rank(levelOf(p[y])) - 1, `${tag}: row ${y} not exactly one level down`);
+      assert.equal(f.rows[y].level, levelOf(f.rows[y].mult), 'hover number matches the lowered level');
+      f.rows[y].surges.forEach((sv, k) => assert.equal(sv, hook.WAVES[n].pulses[k].power));
+    }
+    f.rows.forEach((r, y) => { assert.ok(r.mult <= p[y]); if(!low.includes(y)) assert.equal(r.mult, p[y]); });
+    assert.equal(f.rows[c].mult, p[c], 'centre is never understated');
+  }
+});
+
+test('early forecast: deterministic from the seed, and varies between seeds', () => {
+  const sig = seed => { const { hook } = startPrep(seed, 2); hook.place('buoy', 27, 0);
+    return JSON.stringify(hook.forecast().rows.map(r => r.mult)); };
+  assert.equal(sig(42), sig(42));
+  assert.ok(new Set(SEEDS.map(sig)).size > 1);
+});
+
+test('revision: fires exactly once per prep at 10 s left, then the forecast is the true profile', () => {
+  for(const lang of ['en', 'zh-Hant']){
+    const game = loadGame({ lang, noLose: true });
+    const { hook, G } = game;
+    hook.setSeed(42); hook.startGame(); G.materials = 1000;
+    hook.place('buoy', 27, 0);
+    const toastEl = game.document.getElementById('toast');
+    const toasts = [];
+    let wave = -1, revisions = 0;
+    for(let t = 0; t < 1200 && G.phase !== 'win'; t += DT){
+      const before = toastEl.textContent, wasRevised = G.revised, ph = G.phase, w = G.wave;
+      hook.update(DT);
+      if(G.phase === 'win') break;
+      if(!wasRevised && G.revised && G.phase === 'prep'){
+        revisions++;
+        assert.ok(G.timer <= 10 && G.timer > 10 - 2 * DT, `fired at ${G.timer}`);
+        assert.equal(w, G.wave);
+        const raised = G.raisedRows.map(y => y + 1);
+        const want = lang === 'en' ? `Forecast revised: row${raised.length > 1 ? 's' : ''} ${raised.join(', ')}` : `預警修正：第 ${raised.join('、')} 列`;
+        assert.ok(toastEl.textContent.includes(want), toastEl.textContent);
+        const p = hook.rowProfile(G.wave);
+        hook.forecast().rows.forEach((r, y) => assert.equal(r.mult, p[y]));
+        assert.ok(G.raisedRows.length >= 1 && G.raisedRows.length <= 2);
+      }
+      if(G.phase === 'prep' && G.wave !== wave){ wave = G.wave; }
+    }
+    assert.equal(revisions, 4, 'once in each of the preps of waves 2-5');
+  }
+});
+
+test('revision: only raises, and never fires before 10 s left', () => {
+  const { hook, G } = startPrep(42, 2);
+  hook.place('buoy', 27, 0);
+  const early = hook.forecast().rows.map(r => r.mult);
+  G.timer = 10.5; hook.update(DT);
+  assert.equal(G.revised, false);
+  const p = hook.rowProfile(2);
+  G.timer = 10.01; hook.update(DT);
+  assert.equal(G.revised, true);
+  hook.forecast().rows.forEach((r, y) => assert.ok(r.mult >= early[y] && r.mult === p[y]));
+});
+
+test('revision: a buoy built after the revision shows true values and no toast', () => {
+  const game = startPrep(42, 2);
+  const { hook, G } = game;
+  G.timer = 10.01; hook.update(DT);
+  assert.equal(G.revised, true);
+  const toastEl = game.document.getElementById('toast');
+  toastEl.textContent = '';
+  hook.place('buoy', 27, 0);
+  const p = hook.rowProfile(2);
+  hook.forecast().rows.forEach((r, y) => assert.equal(r.mult, p[y]));
+  hook.update(DT);
+  assert.ok(!/revised|修正/.test(toastEl.textContent.replace(/.*(?=Wave|第)/, '')), toastEl.textContent);
+  assert.equal(G.reviseFlash, 0);
+});
+
+test('revision: no buoy, no revision toast; wave 1 has no revision', () => {
+  const a = startPrep(42, 2), ta = a.document.getElementById('toast');
+  ta.textContent = '';
+  a.G.timer = 10.01; a.hook.update(DT);
+  assert.equal(ta.textContent, '');
+  const b = loadGame(); b.hook.setSeed(42); b.hook.startGame(); b.G.materials = 1000;
+  b.hook.place('buoy', 27, 0);
+  const tb = b.document.getElementById('toast');
+  for(let t = 0; t < 40 && b.G.phase === 'prep'; t += DT){
+    b.hook.update(DT);
+    assert.ok(!/revised|修正/.test(tb.textContent));
+  }
+  assert.equal(b.G.revised, false);
+  assert.ok(b.hook.forecast().rows.every(r => r.mult === 1));
+});
+
+test('revision strings exist in both languages', () => {
+  for(const lang of ['en', 'zh-Hant']){
+    const { window } = loadGame({ lang });
+    const T = window.TSUNAMI_LANGS[lang]({ SUPER: {}, WAVES: [], BASE_INCOME: 0, MAX_TRUCKS: 0, LOSE_DEPTH: 0 });
+    assert.ok(T.tRevised([3, 4]).includes('3') && T.tRevised([3, 4]).includes('4'));
+  }
+});
+
+// ── No buoy, no change ──
+// Golden digests of every HUD pill and the toast, recorded before the buoy
+// existed: seed 7, no structures, dt = 1/60, one full run.
+const HUD_DIGESTS = {
+  en: 'c2b4387783d04af6db6450b8908731b587383ab56322dae54d36078374037dc6',
+  'zh-Hant': '963e654ced89cd1ce208e50fb8a39b3cb9fee7f4a61ef311ebc5c05072912c72',
+};
+test('without a buoy, HUD and toast output across a full run is unchanged', () => {
+  for(const lang of ['en', 'zh-Hant']){
+    const game = loadGame({ noLose: true, lang });
+    const { hook, G } = game;
+    hook.setSeed(7); hook.startGame();
+    const ids = ['mats', 'powerTxt', 'unitTxt', 'phaseTxt', 'timerTxt', 'waveTxt', 'toast'];
+    const last = {}, trace = [];
+    for(let t = 0; t < 1200 && G.phase !== 'win'; t += DT){
+      hook.update(DT);
+      for(const id of ids){
+        const v = game.document.getElementById(id).textContent;
+        if(last[id] !== v){ last[id] = v; trace.push(`${Math.round(t / DT)}|${id}|${v}`); }
+      }
+    }
+    assert.equal(createHash('sha256').update(trace.join('\n')).digest('hex'), HUD_DIGESTS[lang], lang);
+  }
+});
+
+test('buoy strings exist in both languages', () => {
+  for(const lang of ['en', 'zh-Hant']){
+    const { window } = loadGame({ lang });
+    const T = window.TSUNAMI_LANGS[lang]({ SUPER: {}, WAVES: [], BASE_INCOME: 0, MAX_TRUCKS: 0, LOSE_DEPTH: 0 });
+    assert.ok(T.names.buoy && T.role.buoy && T.tipMarker && T.levels.low && T.levels.medium && T.levels.high);
+  }
+});
+
+// ── Warning buoy review fixes ──
+test('buoy: a 2x2 structure cannot cover the buoy through any of its cells', () => {
+  const { hook, G } = loadGame();
+  hook.setSeed(1); hook.startGame(); G.materials = 1000;
+  assert.ok(hook.place('buoy', 28, 5));
+  for(const [x, y] of [[27, 4], [28, 4], [27, 5], [28, 5]])
+    assert.equal(hook.place('recycle', x, y), false, `recycler at ${x},${y} overlaps the buoy`);
+  assert.equal(hook.place('recycle', 29, 5), true, 'a non-overlapping recycler is fine');
+});
+
+test('marker tooltip: Surges lists raw surge strengths, not multiplied by the row', () => {
+  const { hook, G } = loadGame();
+  hook.setSeed(42); hook.startGame(); G.materials = 1000;
+  hook.place('buoy', 27, 0);
+  G.wave = 3; G.revised = true;
+  const m = hook.rowProfile(3)[5];
+  assert.notEqual(m, 1);
+  const raw = hook.WAVES[3].pulses.map(p => '×' + p.power.toFixed(1)).join(' · ');
+  assert.ok(hook.markerTip(5).includes('Surges: ' + raw), hook.markerTip(5));
+});
+
+test('hover: a buoy on the sea-edge column shows its own tooltip while paused', () => {
+  const { hook, G } = loadGame();
+  hook.setSeed(42); hook.startGame(); G.materials = 1000;
+  assert.ok(hook.place('buoy', hook.COLS - 1, 5));
+  const marker = hook.hoverTip(hook.COLS - 1, 5);
+  assert.ok(marker.includes('Forecast'), marker);
+  G.paused = true;
+  assert.ok(hook.hoverTip(hook.COLS - 1, 5).includes('Warning Buoy') || hook.hoverTip(hook.COLS - 1, 5).includes('Beach only'));
+  assert.ok(hook.hoverTip(hook.COLS - 1, 6).includes('Forecast'), 'other edge cells still show markers');
 });
