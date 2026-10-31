@@ -399,3 +399,44 @@ test('bays: during a strong surge a high row reaches a higher edge depth than a 
   assert.ok(edge(hi) > edge(lo) + 0.05,
     `high row ${hi} (x${p[hi].toFixed(2)}) edge ${edge(hi).toFixed(3)} vs low row ${lo} (x${p[lo].toFixed(2)}) edge ${edge(lo).toFixed(3)}`);
 });
+
+// ── Row damage (ticket 04) ──
+// Start wave n (0-based) with the given bay seed, place walls at column x on
+// the given rows, then run `seconds` of the tsunami. Returns HP lost per row.
+function wallDamage(n, seed, x, rows, seconds){
+  const { hook, G } = loadGame({ noLose: true });
+  hook.setSeed(seed);
+  hook.startGame();
+  G.materials = 1e6;
+  for(const y of rows) assert.ok(hook.place('wall', x, y), `place wall at ${x},${y}`);
+  G.wave = n;
+  G.timer = 0;
+  hook.update(DT);  // prep -> tsunami
+  assert.equal(G.phase, 'tsunami');
+  for(let t = 0; t < seconds; t += DT) hook.update(DT);
+  return { lost: rows.map(y => G.grid[x][y] ? G.grid[x][y].maxHp - G.grid[x][y].hp : Infinity), profile: hook.rowProfile(n) };
+}
+
+test('row damage: a wall on a high row loses HP faster than one on a low row, in proportion', () => {
+  const n = 4, x = 22;
+  const { hook } = loadGame({ noLose: true });
+  hook.setSeed(42);
+  hook.startGame();
+  const p = hook.rowProfile(n);
+  // Interior rows only: top/bottom rows spill sideways one way, which changes depth.
+  const inner = p.map((m, y) => ({ m, y })).slice(1, -1).sort((a, b) => a.m - b.m);
+  const lo = inner[0].y, hi = inner[inner.length - 1].y;
+  const { lost: [dHi, dLo] } = wallDamage(n, 42, x, [hi, lo], 12);
+  assert.ok(dLo > 0 && Number.isFinite(dHi), `walls took damage and survived: hi ${dHi}, lo ${dLo}`);
+  const want = p[hi] / p[lo], got = dHi / dLo;
+  assert.ok(Math.abs(got / want - 1) < 0.15,
+    `HP lost ratio ${got.toFixed(3)} vs multiplier ratio ${want.toFixed(3)} (rows ${hi} x${p[hi].toFixed(2)}, ${lo} x${p[lo].toFixed(2)})`);
+});
+
+test('row damage: on wave 1 (flat) wall damage matches the pre-bay value on every row', () => {
+  // 173.04 HP lost in 12 s at x=22 was measured before row damage existed.
+  for(const seed of [1, 42]){
+    const { lost } = wallDamage(0, seed, 22, [4, 8, 12], 12);
+    for(const d of lost) assert.ok(Math.abs(d - 173.04) < 0.01, `seed ${seed}: lost ${d}`);
+  }
+});

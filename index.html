@@ -516,7 +516,9 @@ function flowStep(){
         }
       } else if(left){
         // 撞擊障礙 → 損傷 + 側向漫流
-        left.hp -= h * 1.6;
+        // 海嘯期間，該列的海灣倍率放大或減少傷害
+        const rowMul = G.phase === 'tsunami' ? G.bays[G.wave][y] : 1;
+        left.hp -= h * 1.6 * rowMul;
         if(left.hp <= 0) destroyEntity(left);
 
         let remaining = transfer;
@@ -1895,7 +1897,8 @@ requestAnimationFrame(t => { lastT = t; loop(t); });
 if(TEST) window.__tsunami = Object.freeze({ G, update, startGame, WAVES, HOME, COLS, ROWS, LOSE_DEPTH, pulseIndexAt, nextPulseIndex,
   BAY_PEAK, BAY_FLOOR,
   setSeed: s => { nextSeed = s; },          // 在 startGame 前呼叫
-  rowProfile: w => G.bays[w].slice() });    // 第 w 波（0 起）的每列倍率副本
+  rowProfile: w => G.bays[w].slice(),       // 第 w 波（0 起）的每列倍率副本
+  place: (defId, gx, gy) => placeEntity(defId, gx, gy) });  // 照一般規則建造
 
 })();
 </script>

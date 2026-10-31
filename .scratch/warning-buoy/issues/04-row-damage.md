@@ -4,9 +4,9 @@
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Tests: in the same wave, a wall on a high row loses HP faster than an identical wall on a low row, roughly in proportion to their multipliers
-- [ ] Tests: on wave 1 (flat), wall damage matches today's
-- [ ] Tests: with no structures, total inflow per wave is unchanged (the existing balance test still passes)
-- [ ] README explains that strong rows damage structures faster
+- [x] Tests: in the same wave, a wall on a high row loses HP faster than an identical wall on a low row, roughly in proportion to their multipliers
+- [x] Tests: on wave 1 (flat), wall damage matches today's
+- [x] Tests: with no structures, total inflow per wave is unchanged (the existing balance test still passes)
+- [x] README explains that strong rows damage structures faster
