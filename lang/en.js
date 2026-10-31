@@ -38,6 +38,7 @@
   phasePrep: 'Prep', phaseTsunami: '⚠ Tsunami!', phaseDrain: 'Water receding…',
   phaseSurge: (n, total) => `⚠ Surge ${n} / ${total}`, phaseNextSurge: 'Next surge',
   tWaveIncoming: n => `⚠ Wave ${n} incoming!`,
+  tRevised: rows => `📡 Forecast revised: row${rows.length > 1 ? 's' : ''} ${rows.join(', ')} higher than first thought`,
   tSurgeWarn: (n, s) => `⚠ Surge ${n} in ${s} s!`,
   tNextWave: (n, s) => `Wave ${n} is coming — ${s} s to prepare`,
   tNoMats: 'Not enough materials', tCantBuild: "Can't build here", tMats: n => `+${n} materials`,

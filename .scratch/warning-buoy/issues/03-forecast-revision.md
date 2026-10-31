@@ -4,11 +4,11 @@
 
 **Blocked by:** 02
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Tests: the early forecast understates only rows beside the centre, by one level, and never overstates
-- [ ] Tests: the revision fires exactly once per prep at 10 s left, with the right toast text in both `zh-Hant` and `en`, and afterwards the forecast equals the true profile
-- [ ] Tests: a buoy built after the revision shows the true values with no toast
-- [ ] Tests: wave 1 has no revision
+- [x] Tests: the early forecast understates only rows beside the centre, by one level, and never overstates
+- [x] Tests: the revision fires exactly once per prep at 10 s left, with the right toast text in both `zh-Hant` and `en`, and afterwards the forecast equals the true profile
+- [x] Tests: a buoy built after the revision shows the true values with no toast
+- [x] Tests: wave 1 has no revision
 - [ ] Marker flashing checked by playing
-- [ ] README explains the forecast revision
+- [x] README explains the forecast revision

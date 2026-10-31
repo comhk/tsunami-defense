@@ -38,6 +38,7 @@
   phasePrep: '準備階段', phaseTsunami: '⚠ 海嘯來襲', phaseDrain: '海水退去…',
   phaseSurge: (n, total) => `⚠ 湧浪 ${n} / ${total}`, phaseNextSurge: '下一道湧浪',
   tWaveIncoming: n => `⚠ 第 ${n} 波海嘯來襲！`,
+  tRevised: rows => `📡 預警修正：第 ${rows.join('、')} 列的強度上調`,
   tSurgeWarn: (n, s) => `⚠ 第 ${n} 道湧浪 ${s} 秒後到達！`,
   tNextWave: (n, s) => `第 ${n} 波即將來臨 — 準備時間 ${s} 秒`,
   tNoMats: '材料不足', tCantBuild: '這裡無法建造', tMats: n => `+${n} 材料`,
